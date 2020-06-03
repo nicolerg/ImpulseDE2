@@ -1,0 +1,155 @@
+---
+title: "QC ImpulseDE2"
+author: "Nicole Gay"
+date: "6/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/oak/stanford/groups/smontgom/nicolerg/src/MOTRPAC/ImpulseDE2/R/')
+library(compiler)
+library(Biobase)
+library(BiocParallel)
+library(circlize)
+library(ComplexHeatmap)
+library(cowplot)
+library(DESeq2)
+library(ggplot2)
+library(grDevices)
+library(knitr)
+library(Matrix)
+library(methods)
+library(stats)
+library(SummarizedExperiment)
+library(utils)
+```
+
+## Source my edited version of ImpulseDE2
+```{r source functions}
+for(f in list.files()){
+  print(f)
+  source(f)
+}
+```
+
+## Starting point - simulated data 
+```{r simulate data}
+# case-only with batch effects
+lsSimulatedData <- simulateDataSetImpulseDE2(
+  vecTimePointsA   = rep(seq(1,8),3),
+  vecTimePointsB   = NULL,
+  vecBatchesA      = c(rep("B1",8), rep("B2",8), rep("B3",8)),
+  vecBatchesB      = NULL,
+  scaNConst        = 30,
+  scaNImp          = 50,
+  scaNLin          = 10,
+  scaNSig          = 30,
+  scaMuBatchEffect = 1,
+  scaSDBatchEffect = 0.2,
+  dirOutSimulation = NULL)
+```
+
+## Scenario 1: only covariates (no batch effects); two betas
+```{r adjust df}
+dfAnnotation = lsSimulatedData$dfAnnotation
+matCounts = lsSimulatedData$matObservedCounts
+dim(matCounts)
+dfAnnotation
+# call "Batch" something else
+colnames(dfAnnotation)[colnames(dfAnnotation) == 'Batch'] = 'sample_batch'
+# add sex covariate
+dfAnnotation$sex = sample(c('male','female'), replace=TRUE, size=nrow(dfAnnotation))
+# add continuous covariate
+dfAnnotation$num_var = rnorm(nrow(dfAnnotation))
+head(dfAnnotation)
+table(dfAnnotation$Time, dfAnnotation$sample_batch)
+```
+
+```{r set params}
+matCountData = matCounts
+boolCaseCtrl = FALSE
+vecConfounders = NULL # I feel like this should be reserved for true confounders, not covariates
+vecCovariates = c('sex','num_var','sample_batch')
+scaNProc = 1
+boolVerbose = TRUE
+boolBeta2 = TRUE
+scaQThres = NULL
+```
+
+```{r processData}
+objectImpulseDE2 = runImpulseDE2(
+    matCountData = matCountData, 
+    dfAnnotation = dfAnnotation, 
+    boolCaseCtrl = FALSE,
+    boolBeta2 = TRUE,
+    boolIdentifyTransients = TRUE,
+    vecConfounders = vecConfounders,
+    vecCovariates = NULL,
+    scaNProc = 1,
+    MAXIT = 5000) 
+modelFits = get_lsModelFits(obj=objectImpulseDE2)
+modelFits$case$gene71$lsImpulseFit$vecImpulseParam
+
+singleBeta = runImpulseDE2(
+    matCountData = matCountData, 
+    dfAnnotation = dfAnnotation, 
+    boolCaseCtrl = FALSE,
+    boolBeta2 = FALSE,
+    boolIdentifyTransients = TRUE,
+    vecConfounders = vecConfounders,
+    vecCovariates = NULL,
+    scaNProc = 1,
+    MAXIT = 5000) 
+modelFits = get_lsModelFits(obj=singleBeta)
+modelFits$case$gene71$lsImpulseFit$vecImpulseParam
+
+lsgplotsGenes <- plotGenes(
+  vecGeneIDs       = objectImpulseDE2$dfImpulseDE2Results[dfres$isTransient == TRUE, "Gene"],
+  #scaNTopIDs       = 10,
+  objectImpulseDE2 = objectImpulseDE2,
+  boolCaseCtrl     = FALSE,
+  dirOut           = NULL,
+  strFileName      = NULL,
+  vecRefPval       = NULL, 
+  strNameRefMethod = NULL)
+print(lsgplotsGenes[[1]])
+
+lsgplotsGenes <- plotGenes(
+  vecGeneIDs       = "gene71",
+  #scaNTopIDs       = 10,
+  objectImpulseDE2 = singleBeta,
+  boolCaseCtrl     = FALSE,
+  dirOut           = NULL,
+  strFileName      = NULL,
+  vecRefPval       = NULL, 
+  strNameRefMethod = NULL)
+print(lsgplotsGenes[[1]])
+```
+
+```{r look at output}
+dfres = objectImpulseDE2$dfImpulseDE2Results
+head(dfres)
+
+objectImpulseDE2$dfImpulseDE2Results
+
+objectImpulseDE2$dfImpulseDE2Results["gene40",]
+objectImpulseDE2$dfImpulseDE2Results[objectImpulseDE2$dfImpulseDE2Results$isTransient==TRUE,]
+modelFits = get_lsModelFits(obj=objectImpulseDE2)
+names(modelFits)
+names(modelFits$case)
+modelFits$case$gene40
+
+lsgplotsGenes <- plotGenes(objectImpulseDE2, 
+  #vecGeneIDs       = dfres[dfres$isTransient == TRUE, "Gene"],
+  scaNTopIDs       = 10,
+  objectImpulseDE2 = objectImpulseDE2,
+  boolCaseCtrl     = FALSE,
+  dirOut           = NULL,
+  strFileName      = NULL,
+  vecRefPval       = NULL, 
+  strNameRefMethod = NULL)
+print(lsgplotsGenes[[5]])
+
+c(1, exp(c(0,0):(9)))
+```

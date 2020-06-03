@@ -39,7 +39,7 @@ evalLogLikMu <- function(
     vecTheta, vecCounts, scaDisp, vecSizeFactors, lsvecidxBatch, 
     vecboolObserved) {
     
-    scaMu <- exp(vecTheta[1])
+    scaMu <- exp(vecTheta[1]) # log(mean(vecCounts, na.rm = TRUE) + 1), i.e. constant
     scaNParamUsed <- 1
     # Prevent mean shrinkage to zero:
     if (scaMu < 10^(-10)) {
@@ -142,6 +142,9 @@ evalLogLikMu_comp <- cmpfun(evalLogLikMu)
 #' Batches are enumerated from 1 to number of batches.
 #' @param vecboolObserved (bool vector number of samples)
 #' Whether sample is observed (finite and not NA).
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
 #'  
 #' @return scaLogLik (scalar) Value of cost function 
 #' (loglikelihood) for given gene.
@@ -149,15 +152,22 @@ evalLogLikMu_comp <- cmpfun(evalLogLikMu)
 #' @author David Sebastian Fischer
 evalLogLikImpulse <- function(
     vecTheta, vecCounts, scaDisp, vecSizeFactors, 
-    vecTimepointsUnique, vecidxTimepoint, lsvecidxBatch, vecboolObserved) {
+    vecTimepointsUnique, vecidxTimepoint, lsvecidxBatch, vecboolObserved, boolBeta2) {
     
     # Compute normalised impulse function value:
-    vecImpulseParam <- vecTheta[1:6]
-    vecImpulseParam[2:4] <- exp(vecImpulseParam[2:4])
+    if(boolBeta2){
+        vecImpulseParam <- vecTheta[1:7]
+        vecImpulseParam[3:5] <- exp(vecImpulseParam[3:5])
+        scaNParamUsed <- 7
+    }else{
+        vecImpulseParam <- vecTheta[1:6]
+        vecImpulseParam[2:4] <- exp(vecImpulseParam[2:4])
+        scaNParamUsed <- 6
+    }
+
     vecImpulseValue <- evalImpulse_comp(
         vecImpulseParam = vecImpulseParam, 
         vecTimepoints = vecTimepointsUnique)[vecidxTimepoint]
-    scaNParamUsed <- 6
     
     vecBatchFactors <- array(1, length(vecCounts))
     if (!is.null(lsvecidxBatch)) {

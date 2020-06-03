@@ -85,7 +85,7 @@
 #' @author David Sebastian Fischer
 runDEAnalysis <- function(
     objectImpulseDE2, boolCaseCtrl, 
-    boolIdentifyTransients, scaQThresTransients = 0.001) {
+    boolIdentifyTransients, boolBeta2, scaQThresTransients = 0.001) {
     
     dfAnnot <- get_dfAnnotationProc(obj = objectImpulseDE2)
     
@@ -111,7 +111,11 @@ runDEAnalysis <- function(
         }
         # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
         # for each batch (except for the first one) for each confounder.
-        scaDegFreedomFull <- 6 + 1 + scaNBatchFactors
+        if(boolBeta2){
+            scaDegFreedomFull <- 7 + 1 + scaNBatchFactors
+        }else{
+            scaDegFreedomFull <- 6 + 1 + scaNBatchFactors
+        }
         # 1 constant model parameter1, 1 dispersion estimate and 1 batch factor
         # for each batch (except for the first one) for each confounder.
         scaDegFreedomRed <- 1 + 1 + scaNBatchFactors
@@ -155,10 +159,18 @@ runDEAnalysis <- function(
         # 6 impulse model parameters for each case and control, 1 dispersion
         # estimate and 1 batch factor for each batch (except for the first one)
         # for each confounder in each condition.
-        scaDegFreedomFull <- 6 * 2 + 1 + scaNBatchFactorsFull
-        # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
-        # for each batch (except for the first one) for each confounder.
-        scaDegFreedomRed <- 6 + 1 + scaNBatchFactorsRed
+        if(boolBeta2){
+            scaDegFreedomFull <- 7 * 2 + 1 + scaNBatchFactorsFull
+            # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
+            # for each batch (except for the first one) for each confounder.
+            scaDegFreedomRed <- 7 + 1 + scaNBatchFactorsRed 
+        }else{
+            scaDegFreedomFull <- 6 * 2 + 1 + scaNBatchFactorsFull
+            # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
+            # for each batch (except for the first one) for each confounder.
+            scaDegFreedomRed <- 6 + 1 + scaNBatchFactorsRed       
+        }
+
         vecConvergenceImpulseCombined <- sapply(
             get_lsModelFits(obj=objectImpulseDE2)$combined, 
             function(fit) fit$lsImpulseFit$scaConvergence)
@@ -236,7 +248,11 @@ runDEAnalysis <- function(
                 scaNBatchFactors <- 0
             }
         }
-        scaDegFreedomImpulse <- 6 + 1 + scaNBatchFactors
+        if(boolBeta2){
+            scaDegFreedomImpulse <- 7 + 1 + scaNBatchFactors
+        }else{
+            scaDegFreedomImpulse <- 6 + 1 + scaNBatchFactors
+        }
         scaDegFreedomSigmoid <- 4 + 1 + scaNBatchFactors
         scaDegFreedomConst <- 1 + 1 + scaNBatchFactors
         
@@ -278,7 +294,7 @@ runDEAnalysis <- function(
             as.numeric(vecPvalueSigmoidConst)
         dfDEAnalysis$sigmoidTOconst_padj <- 
             as.numeric(vecPvalueSigmoidConstBH)
-        # Classify trajectories as tranient change or monotonous change
+        # Classify trajectories as transient change or monotonous change
         # (transition).  Note that significant impulse vs sigmoid hits include
         # monotonous fits which are better fit by impulse than by sigmoid, this
         # is corrected for here.
@@ -441,7 +457,9 @@ updateDEAnalysis <- function(objectImpulseDE2, scaQThresTransients = 0.001) {
     objectImpulseDE2 <- runDEAnalysis(
         objectImpulseDE2 = objectImpulseDE2, 
         boolCaseCtrl = get_boolCaseCtrl(obj=objectImpulseDE2), 
-        boolIdentifyTransients = TRUE, scaQThresTransients = scaQThresTransients)
+        boolIdentifyTransients = TRUE, 
+        boolBeta2 = get_boolBeta2(obj=objectImpulseDE2), 
+        scaQThresTransients = scaQThresTransients)
     
     return(objectImpulseDE2)
 }

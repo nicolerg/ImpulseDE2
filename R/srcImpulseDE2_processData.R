@@ -40,10 +40,16 @@
 #' @param boolCaseCtrl (bool) 
 #' 		Whether to perform case-control analysis. Does case-only
 #' 		analysis if FALSE.
+#' @param boolBeta2 (bool)
+#'      Whether to model two different slopes for impulse model instead of 
+#'      assuming onset slope and offset slope are identical.
 #' @param vecConfounders (vector of strings number of confounding variables)
 #' 		Factors to correct for during batch correction. Have to 
 #' 		supply dispersion factors if more than one is supplied.
 #' 		Names refer to columns in dfAnnotation.
+#' @param VecCovariates (vector of strings number of covariates)
+#'      Covariates to adjust for during differential analysis.
+#'      Names refer to columns in dfAnnotation.
 #' @param vecDispersionsExternal (vector length number of
 #'    genes in matCountData) [Default NULL]
 #'    Externally generated list of gene-wise dispersion factors
@@ -73,8 +79,10 @@
 processData <- function(
     dfAnnotation, 
     matCountData,
-    boolCaseCtrl,
+    boolCaseCtrl, 
+    boolBeta2,
     vecConfounders,
+    vecCovariates,
     vecDispersionsExternal,
     vecSizeFactorsExternal){
     
@@ -157,7 +165,9 @@ processData <- function(
         dfAnnotation, 
         matCountData,
         boolCaseCtrl,
+        boolBeta2, 
         vecConfounders,
+        vecCovariates,
         vecDispersionsExternal,
         vecSizeFactorsExternal,
         strReportProcessing){
@@ -167,12 +177,13 @@ processData <- function(
         checkNull(dfAnnotation,"dfAnnotation")
         checkNull(matCountData,"matCountData")
         checkNull(boolCaseCtrl,"boolCaseCtrl")
+        checkNull(boolBeta2,"boolBeta2")
         
         
         ### 2. Check annotation table content
         ### a) Check column names
         vecColNamesRequired <- c("Sample","Condition","Time",
-                                 vecConfounders)
+                                 vecConfounders, vecCovariates)
         if( !all(vecColNamesRequired %in% 
                  colnames(dfAnnotation)) ){
             stop(paste0(
@@ -212,8 +223,7 @@ processData <- function(
         }
         ### e) Batch
         if(!is.null(vecConfounders)){
-            # Check that model matrix based on confounding variables is full rank
-            # 1. Dummy check: Check that number of batches 
+            # Dummy check: Check that number of batches 
             # for each confounding variable is > 1
             for(confounder in vecConfounders){
                 if(length(unique( dfAnnotation[,confounder] ))==1){
@@ -226,9 +236,29 @@ processData <- function(
                         " dfAnnotation."))
                 }
             }
-            # 2. More detailed full rank check
+
+        }
+        ### f) Covariates
+        if(!is.null(vecCovariates)){
+            # Dummy check: Check that number of unique values 
+            # for each covariate is > 1
+            for(confounder in vecCovariates){
+                if(length(unique( dfAnnotation[,confounder] ))==1){
+                    stop(paste0(
+                        "ERROR: Model matrix based on covariates {",
+                        vecCovariates,
+                        "} is not full rank: Only one unique value",
+                        " given for covariate ", confounder, 
+                        ". Remove from vecCovariates or correct",
+                        " dfAnnotation."))
+                }
+            }
+        }
+        ### g) More detailed full rank check
+        if(!is.null(vecConfounders) | !is.null(vecCovariates)){
+            vecAll = c(vecConfounders, vecCovariates)
             matModelMatrix <- do.call(cbind, lapply(
-                vecConfounders,
+                vecAll,
                 function(confounder){
                     if(is.numeric(dfAnnotation[,confounder])){
                       dfAnnotation[,confounder]
@@ -239,15 +269,15 @@ processData <- function(
                 }))
             if(rankMatrix(matModelMatrix)[1] != dim(matModelMatrix)[2]){
                 stop(paste0(
-                    "Model matrix based on confounding variables {", 
-                    vecConfounders,
+                    "Model matrix based on variables {", 
+                    vecConfounders, vecCovariates, 
                     "} is not full rank. ",
-                    "Correct the confounding variables. ",
+                    "Correct the confounding variables or covariates.",
                     " Note that it is not possible to model",
-                    " NESTED confounding variables: ",
-                    " Any confounding variables cannot",
-                    " be a linear combination of the other ",
-                    " confounding variables."))
+                    " NESTED variables:",
+                    " Any variable cannot",
+                    " be a linear combination of the other",
+                    " variables."))
             }
         }
         
@@ -336,6 +366,13 @@ processData <- function(
             strReportProcessing <- paste0(
                 strReportProcessing, "\n","ImpulseDE2 runs in case-only mode.") 
         }
+        if(boolBeta2) { 
+            strReportProcessing <- paste0(
+                strReportProcessing,"\n","ImpulseDE2 fits an impulse model with two slopes.") 
+        } else { 
+            strReportProcessing <- paste0(
+                strReportProcessing, "\n","ImpulseDE2 fits an impulse model with a single slope.") 
+        }
         strReportProcessing <- paste0(
             strReportProcessing, "\n",
             paste0( "Found time points: ",
@@ -390,7 +427,8 @@ processData <- function(
     procAnnotation <- function(dfAnnotation,
                                matCountData,
                                boolCaseCtrl,
-                               vecConfounders){
+                               vecConfounders,
+                               vecCovariates){
         
         # Make sure all columns are not factors
         for(col in seq(1,dim(dfAnnotation)[2])) dfAnnotation[,col] <- 
@@ -416,7 +454,7 @@ processData <- function(
         
         # Take out columns which are not used
         dfAnnotationProc <- dfAnnotationProc[,c("Sample", "Time", "Condition", 
-                                                vecConfounders)]
+                                                vecConfounders, vecCovariates)]
         # Add categorial time column for DESeq2
         dfAnnotationProc$TimeCateg <- paste0("_", dfAnnotationProc$Time)
         # Add nested batches for running DESeq2
@@ -539,7 +577,9 @@ processData <- function(
         dfAnnotation=dfAnnotation,
         matCountData=matCountData,
         boolCaseCtrl=boolCaseCtrl,
+        boolBeta2=boolBeta2,
         vecConfounders=vecConfounders,
+        vecCovariates=vecCovariates,
         vecDispersionsExternal=vecDispersionsExternal,
         vecSizeFactorsExternal=vecSizeFactorsExternal )
     
@@ -547,7 +587,8 @@ processData <- function(
     dfAnnotationProc <- procAnnotation(dfAnnotation=dfAnnotation,
                                        matCountData=matCountData,
                                        boolCaseCtrl=boolCaseCtrl,
-                                       vecConfounders=vecConfounders)
+                                       vecConfounders=vecConfounders,
+                                       vecCovariates=vecCovariates)
     
     # Process raw counts
     matCountDataProc <- nameGenes(matCountDataProc=matCountData)

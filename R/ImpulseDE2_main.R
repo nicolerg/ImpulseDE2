@@ -28,10 +28,12 @@ NULL
 #' \item matCountData
 #' \item dfAnnotation
 #' \item boolCaseCtrl
+#' \item boolBeta2
 #' \item vecConfounders
 #' }
 #' Additionally, you can provide:
 #' \itemize{
+#' \item vecCovariates to specify additional covariates to adjust for.
 #' \item scaNProc to set the number of processes for parallelisation.
 #' \item scaQThres to set the cut off for your DE gene list. 
 #' \item vecDispersionsExternal to supply external dispersion parameters
@@ -72,9 +74,15 @@ NULL
 #' @param boolCaseCtrl (bool) [Default FALSE]
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
+#' @param boolBeta2 (bool) [Default FALSE]
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
 #' @param vecConfounders (vector of strings number of confounding variables)
 #' Factors to correct for during batch correction. Have to 
 #' supply dispersion factors if more than one is supplied.
+#' Names refer to columns in dfAnnotation.
+#' @param vecCovariates (vector of stings number of covaraites)
+#' Covariates to adjust for when running DESeq.
 #' Names refer to columns in dfAnnotation.
 #' @param scaNProc (scalar) [Default 1] Number of processes for 
 #' parallelisation.
@@ -94,6 +102,8 @@ NULL
 #' and hypothesis testing between constant, sigmoidal and impulse model.
 #' @param boolVerbose (bool) [Default TRUE] Whether to print
 #' progress to stdout.
+#' @param MAXIT (scalar) [Default 1000] 
+#' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return (object of class ImpulseDE2Object)
 #' This object can be treated as a list with 2 elements:
@@ -171,7 +181,9 @@ NULL
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
+#' boolBeta2       = FALSE,
 #' vecConfounders  = NULL,
+#' vecCovariates   = NULL,
 #' scaNProc        = 1 )
 #' head(objectImpulseDE2$dfImpulseDE2Results)
 #' 
@@ -180,10 +192,14 @@ NULL
 #' @export
 runImpulseDE2 <- function(
     matCountData = NULL, dfAnnotation = NULL, boolCaseCtrl = FALSE, 
-    vecConfounders = NULL, scaNProc = 1, scaQThres = NULL, 
+    boolBeta2 = FALSE,
+    vecConfounders = NULL, 
+    vecCovariates = NULL,
+    scaNProc = 1, scaQThres = NULL, 
     vecDispersionsExternal = NULL, 
     vecSizeFactorsExternal = NULL, boolIdentifyTransients = FALSE, 
-    boolVerbose = TRUE) {
+    boolVerbose = TRUE,
+    MAXIT = 1000) {
     
     strMessage <- paste0("ImpulseDE2 for count data, v", 
                          packageDescription("ImpulseDE2", fields = "Version"))
@@ -201,7 +217,10 @@ runImpulseDE2 <- function(
         }
         lsProcessedData <- processData(
             dfAnnotation = dfAnnotation, matCountData = matCountData, 
-            boolCaseCtrl = boolCaseCtrl, vecConfounders = vecConfounders, 
+            boolCaseCtrl = boolCaseCtrl, 
+            boolBeta2 = boolBeta2,
+            vecConfounders = vecConfounders, 
+            vecCovariates = vecCovariates,
             vecDispersionsExternal = vecDispersionsExternal, 
             vecSizeFactorsExternal = vecSizeFactorsExternal)
         
@@ -234,7 +253,8 @@ runImpulseDE2 <- function(
                     dfAnnotationProc = dfAnnotationProc, 
                     matCountDataProc = matCountDataProc, 
                     boolCaseCtrl = boolCaseCtrl, 
-                    vecConfounders = vecConfounders)
+                    vecConfounders = vecConfounders,
+                    vecCovariates = vecCovariates)
             })
             strMessage <- paste0("Consumed time: ", 
                                  round(tm_runDESeq2["elapsed"]/60,2), " min.")
@@ -264,7 +284,10 @@ runImpulseDE2 <- function(
             vecAllIDs = rownames(matCountData), 
             dfAnnotationProc = dfAnnotationProc, 
             vecSizeFactors = vecSizeFactors, vecDispersions = vecDispersions, 
-            boolCaseCtrl = boolCaseCtrl, vecConfounders = vecConfounders, 
+            boolCaseCtrl = boolCaseCtrl, 
+            boolBeta2 = boolBeta2,
+            vecConfounders = vecConfounders, 
+            vecCovariates = vecCovariates,
             scaNProc = scaNProc, scaQThres = scaQThres, strReport = strReport)
         
         # 5. Fit null and alternative model to each gene
@@ -275,7 +298,10 @@ runImpulseDE2 <- function(
         tm_fitImpulse <- system.time({
             objectImpulseDE2 <- fitModels(
                 objectImpulseDE2 = objectImpulseDE2, 
-                vecConfounders = vecConfounders, boolCaseCtrl = boolCaseCtrl)
+                vecConfounders = vecConfounders, 
+                boolCaseCtrl = boolCaseCtrl,
+                boolBeta2 = boolBeta2,
+                MAXIT = MAXIT)
         })
         strMessage <- paste0("Consumed time: ", 
                              round(tm_fitImpulse["elapsed"]/60, 2), " min.")
@@ -292,7 +318,9 @@ runImpulseDE2 <- function(
             tm_fitSigmoid <- system.time({
                 objectImpulseDE2 <- fitSigmoidModels(
                     objectImpulseDE2 = objectImpulseDE2, 
-                    vecConfounders = vecConfounders, strCondition = "case")
+                    vecConfounders = vecConfounders, 
+                    strCondition = "case",
+                    MAXIT = MAXIT)
             })
             strMessage <- paste0("Consumed time: ", 
                                  round(tm_fitSigmoid["elapsed"]/60, 2), " min.")
@@ -309,7 +337,8 @@ runImpulseDE2 <- function(
         objectImpulseDE2 <- runDEAnalysis(
             objectImpulseDE2 = objectImpulseDE2, 
             boolCaseCtrl = get_boolCaseCtrl(obj=objectImpulseDE2),
-            boolIdentifyTransients = boolIdentifyTransients)
+            boolIdentifyTransients = boolIdentifyTransients,
+            boolBeta2 = boolBeta2)
         
         if (!is.null(scaQThres)) {
             vecDEGenes <- as.vector(objectImpulseDE2$dfImpulseDE2Results[

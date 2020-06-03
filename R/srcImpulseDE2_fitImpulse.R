@@ -24,20 +24,23 @@
 #' Each vector has one entry per sample with the index batch
 #' within the given confounding variable of the given sample.
 #' Batches are enumerated from 1 to number of batches.
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
 #' 
 #' @return (list length 2)
 #' \itemize{
-#' \item peak (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item peak (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Peak model initialisations of impulse model parameters.
-#' \item valley (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item valley (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Valley model initialisations of impulse model parameters.
 #' }
 #' 
 #' @author David Sebastian Fischer
 estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors, 
-                                 lsvecidxBatch) {
+                                 lsvecidxBatch, boolBeta2) {
     
     # Compute general statistics for initialisation:
     vecTimepointsUnique <- unique(vecTimepoints)
@@ -89,8 +92,12 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
     vecGradients <- vecDiffExpr / vecDiffTime
     vecGradients[is.na(vecGradients) | !is.finite(vecGradients)] <- 0
     
+    # Some parameters are the same for both sigmoids
+    theta1 = log(vecExpressionMeans[1] + 1)
+    theta3 = log(vecExpressionMeans[scaNTimepoints] + 1)
+
     # Compute peak initialisation Beta: Has to be negative, Theta1: Low,
-    # Theta2: High, Theta3: Low t1: Around first observed inflexion point,
+    # Theta2: High, Theta3: Low, t1: Around first observed inflexion point,
     # t2: Around second observed inflexion point
     vecdidxFirstPart <- seq(1, indMaxMiddleMean-1, by=1)
     vecdidxSecndPart <- seq(indMaxMiddleMean, length(vecGradients), by=1)
@@ -101,16 +108,32 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
         match(min(
             vecGradients[vecdidxSecndPart], na.rm = TRUE), 
             vecGradients[vecdidxSecndPart])
-    vecParamGuessPeak <- c(
-        1, 
-        log(vecExpressionMeans[1] + 1), 
-        log(scaMaxMiddleMean + 1), 
-        log(vecExpressionMeans[scaNTimepoints] + 1), 
-        (vecTimepointsUnique[indLowerInflexionPoint] + 
-             vecTimepointsUnique[indLowerInflexionPoint + 1])/2, 
-        (vecTimepointsUnique[indUpperInflexionPoint] + 
-             vecTimepointsUnique[indUpperInflexionPoint + 1])/2
-    )
+
+    if(boolBeta2){
+        vecParamGuessPeak <- c(
+            1, # beta1
+            -1, # beta2
+            theta1, 
+            log(scaMaxMiddleMean + 1), # theta2
+            theta3, 
+            (vecTimepointsUnique[indLowerInflexionPoint] + 
+                 vecTimepointsUnique[indLowerInflexionPoint + 1])/2, # t1
+            (vecTimepointsUnique[indUpperInflexionPoint] + 
+                 vecTimepointsUnique[indUpperInflexionPoint + 1])/2 # t2
+        )
+    }else{
+        vecParamGuessPeak <- c(
+            1, # beta
+            theta1, 
+            log(scaMaxMiddleMean + 1), # theta2
+            theta3, 
+            (vecTimepointsUnique[indLowerInflexionPoint] + 
+                 vecTimepointsUnique[indLowerInflexionPoint + 1])/2, # t1
+            (vecTimepointsUnique[indUpperInflexionPoint] + 
+                 vecTimepointsUnique[indUpperInflexionPoint + 1])/2 # t2
+        )
+    }
+
     
     # Compute valley initialisation Beta: Has to be negative, Theta1: High,
     # Theta2: Low, Theta3: High t1: Around first observed inflexion point,
@@ -121,17 +144,32 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
     indUpperInflexionPoint <- indMinMiddleMean - 1 + match(max(
         vecGradients[indMinMiddleMean:(scaNTimepoints - 1)], na.rm = TRUE), 
         vecGradients[indMinMiddleMean:(scaNTimepoints - 1)])
-    vecParamGuessValley <- c(
-        1, 
-        log(vecExpressionMeans[1] + 1), 
-        log(scaMinMiddleMean + 1), 
-        log(vecExpressionMeans[scaNTimepoints] + 1), 
-        (vecTimepointsUnique[indLowerInflexionPoint] + 
-             vecTimepointsUnique[indLowerInflexionPoint + 1])/2, 
-        (vecTimepointsUnique[indUpperInflexionPoint] + 
-             vecTimepointsUnique[indUpperInflexionPoint + 1])/2
-    )
-    
+
+    if(boolBeta2){
+        vecParamGuessValley <- c(
+            -1, # beta1
+            1, # beta2
+            theta1, 
+            log(scaMinMiddleMean + 1), # theta2
+            theta3, 
+            (vecTimepointsUnique[indLowerInflexionPoint] + 
+                 vecTimepointsUnique[indLowerInflexionPoint + 1])/2, # t1
+            (vecTimepointsUnique[indUpperInflexionPoint] + 
+                 vecTimepointsUnique[indUpperInflexionPoint + 1])/2 # t2
+        )
+    }else{
+        vecParamGuessValley <- c(
+            -1, # beta 
+            theta1, 
+            log(scaMinMiddleMean + 1), # theta2
+            theta3, 
+            (vecTimepointsUnique[indLowerInflexionPoint] + 
+                 vecTimepointsUnique[indLowerInflexionPoint + 1])/2, # t1
+            (vecTimepointsUnique[indUpperInflexionPoint] + 
+                 vecTimepointsUnique[indUpperInflexionPoint + 1])/2 # t2
+        )
+    }
+
     return(list(peak = vecParamGuessPeak, valley = vecParamGuessValley))
 }
 
@@ -188,10 +226,10 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' 
 #' @author David Sebastian Fischer
 fitConstModel <- function(
-    vecCounts, scaDisp, vecSizeFactors, lsvecidxBatch, 
+    vecCounts, scaDisp, vecSizeFactors, lsvecidxBatch,
     MAXIT = 1000, RELTOL = 10^(-8), trace = 0, REPORT = 10) {
     
-    vecParamGuess <- log(mean(vecCounts, na.rm = TRUE) + 1)
+    vecParamGuess <- log(mean(vecCounts, na.rm = TRUE) + 1) # constant value
     if (!is.null(lsvecidxBatch)) {
         for (vecidxConfounder in lsvecidxBatch) {
             vecParamGuess <- c(vecParamGuess, 
@@ -201,12 +239,12 @@ fitConstModel <- function(
     
     lsFit <- tryCatch({
         optim(par = vecParamGuess, fn = evalLogLikMu_comp, 
-              vecCounts = vecCounts, scaDisp = scaDisp, 
-              vecSizeFactors = vecSizeFactors, 
-              lsvecidxBatch = lsvecidxBatch, 
-              vecboolObserved = !is.na(vecCounts), method = "BFGS", 
-              control = list(maxit = MAXIT, reltol = RELTOL, fnscale = -1)
-        )[c("par", "value", "convergence")]
+            vecCounts = vecCounts, scaDisp = scaDisp, 
+            vecSizeFactors = vecSizeFactors, 
+            lsvecidxBatch = lsvecidxBatch, 
+            vecboolObserved = !is.na(vecCounts), method = "BFGS", 
+            control = list(maxit = MAXIT, reltol = RELTOL, fnscale = -1)
+            )[c("par", "value", "convergence")] # parameter estimate, log likelihood, convergence code
     }, error = function(strErrorMsg) {
         print(paste0("ERROR: Fitting null model: fitConstModel().", 
                      " Wrote report into ImpulseDE2_lsErrorCausingGene.RData"))
@@ -292,7 +330,10 @@ fitConstModel <- function(
 #' @param vecidxTimepoint (index vector length number of samples)
 #' Index of of time point assigned to each sample in vector
 #' vecTimepointsUnique.
-#' @param MAXIT (scalar) [Default 1000] 
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param MAXIT (scalar)
 #' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' @param RELTOL (scalar) [Default 10^(-8)]
 #' Maximum relative change in loglikelihood to reach convergence in
@@ -304,8 +345,8 @@ fitConstModel <- function(
 #' 
 #' @return (list) List of impulse fit parameters and results.
 #' \itemize{
-#' \item vecImpulseParam (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item vecImpulseParam (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.
@@ -324,9 +365,8 @@ fitConstModel <- function(
 #' @author David Sebastian Fischer
 fitImpulseModel <- function(
     vecImpulseParamGuess, vecCounts, scaDisp, vecSizeFactors, 
-    lsvecidxBatch, vecTimepointsUnique, vecidxTimepoint, 
+    lsvecidxBatch, vecTimepointsUnique, vecidxTimepoint, boolBeta2,
     MAXIT = 1000, RELTOL = 10^(-8), trace = 0, REPORT = 10) {
-    
     
     vecParamGuess <- vecImpulseParamGuess
     if (!is.null(lsvecidxBatch)) {
@@ -343,7 +383,9 @@ fitImpulseModel <- function(
               vecSizeFactors = vecSizeFactors, 
               vecTimepointsUnique = vecTimepointsUnique, 
               vecidxTimepoint = vecidxTimepoint, lsvecidxBatch = lsvecidxBatch, 
-              vecboolObserved = !is.na(vecCounts), method = "BFGS", 
+              vecboolObserved = !is.na(vecCounts), 
+              boolBeta2 = boolBeta2,
+              method = "BFGS", 
               control = list(maxit = MAXIT, reltol = RELTOL, fnscale = -1)
         )[c("par", "value", "convergence")]
     }, error = function(strErrorMsg) {
@@ -360,20 +402,29 @@ fitImpulseModel <- function(
                      paste(vecidxTimepoint, collapse = " ")))
         print(paste0("lsvecidxBatch ", 
                      paste(lsvecidxBatch, collapse = " ")))
+        print(paste0("boolBeta2 ", boolBeta2))
         print(paste0("MAXIT ", MAXIT))
         print(strErrorMsg)
         stop(strErrorMsg)
     })
     
     # Extract parameter estimates
-    vecImpulseParam <- lsFit$par[1:6]
-    vecImpulseParam[2:4] <- exp(vecImpulseParam[2:4])
-    names(vecImpulseParam) <- c("beta", "h0", "h1", "h2", "t1", "t2")
+    if(boolBeta2){
+        vecImpulseParam <- lsFit$par[1:7]
+        vecImpulseParam[3:5] <- exp(vecImpulseParam[3:5])
+        names(vecImpulseParam) <- c("beta1", "beta2", "h0", "h1", "h2", "t1", "t2")
+        scaNParamUsed <- 7
+    }else{
+        vecImpulseParam <- lsFit$par[1:6]
+        vecImpulseParam[2:4] <- exp(vecImpulseParam[2:4])
+        names(vecImpulseParam) <- c("beta", "h0", "h1", "h2", "t1", "t2")
+        scaNParamUsed <- 6
+    }
+
     vecImpulseValue <- evalImpulse_comp(
         vecImpulseParam = vecImpulseParam, 
         vecTimepoints = vecTimepointsUnique)[vecidxTimepoint]
     names(vecImpulseValue) <- names(vecCounts)
-    scaNParamUsed <- 6
     if (!is.null(lsvecidxBatch)) {
         lsvecBatchFactors <- list()
         for(i in seq(1,length(lsvecidxBatch))) {
@@ -446,7 +497,10 @@ fitImpulseModel <- function(
 #' within the given confounding variable of the given sample. Reference
 #' is the list of unique batch ids for each confounding variable.
 #' @param boolFitConst (bool) Whether to fit a constant model.
-#' @param MAXIT (scalar) [Default 1000] 
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param MAXIT (scalar)
 #' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return (list length 2)
@@ -454,8 +508,8 @@ fitImpulseModel <- function(
 #' \itemize{
 #' \item lsImpulseFit (list) List of impulse fit parameters and results.
 #' \itemize{
-#' \item vecImpulseParam (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item vecImpulseParam (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.
@@ -490,12 +544,13 @@ fitImpulseModel <- function(
 #' @author David Sebastian Fischer
 fitConstImpulseGene <- function(
     vecCounts, scaDisp, vecSizeFactors, vecTimepointsUnique, 
-    vecidxTimepoint, lsvecidxBatch, boolFitConst, MAXIT = 1000) {
+    vecidxTimepoint, lsvecidxBatch, boolFitConst, boolBeta2, MAXIT) {
     
     # (I) Fit Impulse model 1. Compute initialisations
     lsParamGuesses <- estimateImpulseParam(
         vecCounts = vecCounts, vecTimepoints = vecTimepointsUnique[vecidxTimepoint], 
-        lsvecidxBatch = lsvecidxBatch, vecSizeFactors = vecSizeFactors)
+        lsvecidxBatch = lsvecidxBatch, vecSizeFactors = vecSizeFactors,
+        boolBeta2 = boolBeta2)
     vecParamGuessPeak <- lsParamGuesses$peak
     vecParamGuessValley <- lsParamGuesses$valley
     
@@ -505,7 +560,9 @@ fitConstImpulseGene <- function(
                                  vecSizeFactors = vecSizeFactors, 
                                  vecTimepointsUnique = vecTimepointsUnique, 
                                  vecidxTimepoint = vecidxTimepoint, 
-                                 lsvecidxBatch = lsvecidxBatch, MAXIT = MAXIT)
+                                 lsvecidxBatch = lsvecidxBatch, 
+                                 boolBeta2 = boolBeta2,
+                                 MAXIT = MAXIT)
     # 3. Initialisation: Valley
     lsFitValley <- fitImpulseModel(
         vecImpulseParamGuess = vecParamGuessValley, 
@@ -513,7 +570,9 @@ fitConstImpulseGene <- function(
         vecSizeFactors = vecSizeFactors, 
         vecTimepointsUnique = vecTimepointsUnique, 
         vecidxTimepoint = vecidxTimepoint, 
-        lsvecidxBatch = lsvecidxBatch, MAXIT = MAXIT)
+        lsvecidxBatch = lsvecidxBatch, 
+        boolBeta2 = boolBeta2,
+        MAXIT = MAXIT)
     
     # (II) Select best fit and report fit type
     if (lsFitValley$scaLL > lsFitPeak$scaLL) {
@@ -532,8 +591,12 @@ fitConstImpulseGene <- function(
     } else {
         lsConstFit <- NULL
     }
+
+    # # (IV) Fit line 
+    # lsLinearFit <- fitLinearModel()
     
-    return(list(lsImpulseFit = lsBestImpulseFit, lsConstFit = lsConstFit))
+    return(list(lsImpulseFit = lsBestImpulseFit, 
+        lsConstFit = lsConstFit))
 }
 
 #' Fits impulse and constant models to all genes on all samples
@@ -562,6 +625,11 @@ fitConstImpulseGene <- function(
 #' Each vector has one entry per sample with the name of the batch ID
 #' within the given confounding variable of the given sample.
 #' @param boolFitConst (bool) Whether to fit a constant model.
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param MAXIT (scalar)
+#' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return (list length 5)
 #' \itemize{
@@ -578,8 +646,8 @@ fitConstImpulseGene <- function(
 #' \itemize{
 #' \item lsImpulseFit (list) List of impulse fit parameters and results.
 #' \itemize{
-#' \item vecImpulseParam (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item vecImpulseParam (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.
@@ -630,11 +698,11 @@ fitConstImpulseGene <- function(
 #' @author David Sebastian Fischer
 fitConstImpulse <- function(
     matCountDataProcCondition, vecDispersions, vecSizeFactors, 
-    vecTimepoints, lsvecBatches, boolFitConst) {
+    vecTimepoints, lsvecBatches, boolFitConst, boolBeta2, MAXIT) {
     
     # Maximum number of iterations for numerical optimisation of likelihood
     # function in MLE fitting of impulse and constant model:
-    MAXIT <- 1000
+    #MAXIT <- 1000
     
     # Get sample group assignment indices: Time and batch
     vecTimepointsUnique <- sort(unique(vecTimepoints))
@@ -663,6 +731,7 @@ fitConstImpulse <- function(
             vecTimepointsUnique = vecTimepointsUnique, 
             vecidxTimepoint = vecidxTimepoint, 
             lsvecidxBatch = lsvecidxBatch, boolFitConst = boolFitConst, 
+            boolBeta2 = boolBeta2,
             MAXIT = MAXIT)
     })
     names(lsFits) <- rownames(matCountDataProcCondition)
@@ -671,6 +740,7 @@ fitConstImpulse <- function(
                 vecidxTimepoint = vecidxTimepoint, lsvecBatchUnique = lsvecBatchUnique, 
                 lsvecidxBatch = lsvecidxBatch))
 }
+
 
 #' Fits impulse and constant models to a timecourse dataset
 #' 
@@ -690,6 +760,11 @@ fitConstImpulse <- function(
 #' @param boolCaseCtrl (bool) 
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
+#' @param boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param MAXIT (scalar)
+#' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return objectImpulseDE2 (object class ImpulseDE2Object)
 #' Object with sigmoidal fit added: objectImpulseDE2@lsModelFits
@@ -743,8 +818,8 @@ fitConstImpulse <- function(
 #' \itemize{
 #' \item lsImpulseFit (list) List of impulse fit parameters and results.
 #' \itemize{
-#' \item vecImpulseParam (numeric vector length 6)
-#' \{beta, h0, h1, h2, t1, t2\}
+#' \item vecImpulseParam (numeric vector length 6 or 7)
+#' \{beta, h0, h1, h2, t1, t2\} or \{beta1, beta2, h0, h1, h2, t1, t2\}
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.
@@ -779,7 +854,7 @@ fitConstImpulse <- function(
 #' }
 #' 
 #' @author David Sebastian Fischer
-fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl) {
+fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl, boolBeta2, MAXIT) {
     
     lsFitResults_all = list()
     dfAnnot <- get_dfAnnotationProc(obj=objectImpulseDE2)
@@ -832,7 +907,9 @@ fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl) {
             vecTimepoints = vecTimepoints[lsSamplesByCond[[label]]], 
             lsvecBatches = lapply(lsvecBatches, function(confounder) 
                 confounder[lsSamplesByCond[[label]]] ), 
-            boolFitConst = TRUE)
+            boolFitConst = TRUE,
+            boolBeta2 = boolBeta2,
+            MAXIT = MAXIT)
         # Note: Don't need constant fit with case-control other than for results
         # table and transient identification. It is however fast and the
         # inferred means may be of interest - do for all conditions.

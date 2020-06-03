@@ -10,7 +10,7 @@
 #' are returned). The remaining objects representing hidden
 #' parameters can be used to evaluate parameter estimates.
 #' 
-#' @seealso Called by separately by user.
+#' @seealso Called separately by user.
 #' 
 #' @param vecTimePointsA (numeric vector number of time points)
 #' Number of time points in batch A.

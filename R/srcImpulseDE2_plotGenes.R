@@ -129,6 +129,8 @@ plotGenes <- function(
             min(get_dfAnnotationProc(obj=objectImpulseDE2)$Time), 
                                 max(get_dfAnnotationProc(obj=objectImpulseDE2)$Time), 
                                 length.out = 100)
+
+        # Values from fitted impulse model 
         vecCaseImpulseParam <- get_lsModelFits(
             obj=objectImpulseDE2)$case[[id]]$lsImpulseFit$vecImpulseParam
         vecCaseImpulseValue <- evalImpulse_comp(
@@ -300,7 +302,8 @@ plotGenes <- function(
             }
         }
         gplotID <- gplotGene + scale_colour_manual(values = cbPalette) + 
-            xlab("time [hours]") + ylab("Read counts")
+            xlab("Time [hours]") + ylab("Size-factor-adjusted counts") +
+            theme_classic()
         if (!is.null(strNameRefMethod)) {
             gplotID <- gplotID + 
                 labs(title = paste0(

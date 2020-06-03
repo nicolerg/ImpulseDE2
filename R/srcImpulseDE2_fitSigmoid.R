@@ -135,7 +135,7 @@ estimateSigmoidParam <- function(
 #' @param vecidxTimepoint (index vector length number of samples)
 #' Index of of time point assigned to each sample in vector
 #' vecTimepointsUnique.
-#' @param MAXIT (scalar) [Default 1000] 
+#' @param MAXIT (scalar)
 #' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' @param RELTOL (scalar) [Default 10^(-8)]
 #' Maximum relative change in loglikelihood to reach convergence in
@@ -168,7 +168,7 @@ estimateSigmoidParam <- function(
 fitSigmoidModel <- function(
     vecSigmoidParamGuess, vecCounts, scaDisp, vecSizeFactors, 
     lsvecidxBatch, vecTimepointsUnique, vecidxTimepoint, 
-    MAXIT = 1000, RELTOL = 10^(-8), trace = 0, REPORT = 10) {
+    MAXIT, RELTOL = 10^(-8), trace = 0, REPORT = 10) {
     
     
     vecParamGuess <- vecSigmoidParamGuess
@@ -286,7 +286,7 @@ fitSigmoidModel <- function(
 #' Each vector has one entry per sample with the index of the batch ID
 #' within the given confounding variable of the given sample. Reference
 #' is the list of unique batch ids for each confounding variable.
-#' @param MAXIT (scalar) [Default 1000] 
+#' @param MAXIT (scalar)
 #' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return (list) 
@@ -312,7 +312,7 @@ fitSigmoidModel <- function(
 #' @author David Sebastian Fischer
 fitSigmoidGene <- function(
     vecCounts, scaDisp, vecSizeFactors, vecTimepointsUnique, 
-    vecidxTimepoint, lsvecidxBatch, MAXIT = 1000) {
+    vecidxTimepoint, lsvecidxBatch, MAXIT) {
     
     # (I) Fit sigmoidal model 1. Compute initialisations
     lsParamGuesses <- estimateSigmoidParam(
@@ -366,6 +366,8 @@ fitSigmoidGene <- function(
 #' @param strCondition (str)
 #' Name of condition entry in lsModelFits for which sigmoidal
 #' models are to be fit to each gene.
+#' @param MAXIT (scalar)
+#' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' 
 #' @return objectImpulseDE2 (object class ImpulseDE2Object)
 #' Object with sigmoidal fit added: objectImpulseDE2@@lsModelFits
@@ -476,7 +478,7 @@ fitSigmoidGene <- function(
 #' @author David Sebastian Fischer
 #' 
 #' @export
-fitSigmoidModels <- function(objectImpulseDE2, vecConfounders, strCondition) {
+fitSigmoidModels <- function(objectImpulseDE2, vecConfounders, strCondition, MAXIT) {
     
     dfAnnot <- get_dfAnnotationProc(obj=objectImpulseDE2)
     lsModelFits <- get_lsModelFits(obj=objectImpulseDE2)
@@ -498,7 +500,7 @@ fitSigmoidModels <- function(objectImpulseDE2, vecConfounders, strCondition) {
     
     # Maximum number of iterations for numerical optimisation of likelihood
     # function in MLE fitting of sigmoidal model:
-    MAXIT <- 1000
+    #MAXIT <- 1000
     
     vecGeneIDs <- rownames(get_matCountDataProc(obj=objectImpulseDE2))
     lsSigmoidFits <- bplapply(vecGeneIDs, function(x) {
@@ -511,7 +513,8 @@ fitSigmoidModels <- function(objectImpulseDE2, vecConfounders, strCondition) {
                     obj=objectImpulseDE2)[vecSamplesCond], 
                 vecTimepointsUnique = vecTimepointsUniqueCond, 
                 vecidxTimepoint = vecidxTimepointCond, 
-                lsvecidxBatch = lsvecidxBatchCond, MAXIT = MAXIT)
+                lsvecidxBatch = lsvecidxBatchCond, 
+                MAXIT = MAXIT)
         })
     names(lsSigmoidFits) <- vecGeneIDs
     

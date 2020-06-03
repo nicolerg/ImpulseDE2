@@ -186,9 +186,15 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' @slot boolCaseCtrl (bool) 
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
+#' @slot boolBeta2 (bool)
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
 #' @slot vecConfounders (vector of strings number of confounding variables)
 #' Factors to correct for during batch correction. Have to 
 #' supply dispersion factors if more than one is supplied.
+#' Names refer to columns in dfAnnotation.
+#' @slot vecCovariates (vector of stings number of covaraites)
+#' Covariates to adjust for during differential analysis.
 #' Names refer to columns in dfAnnotation.
 #' @slot scaNProc (scalar) Number of processes for 
 #' parallelisation.
@@ -204,7 +210,10 @@ setClass("ImpulseDE2Object", slots = c(
     dfImpulseDE2Results = "data.frameORNULL", 
     vecDEGenes = "characterORNULL", lsModelFits = "listORNULL", matCountDataProc = "matrix", 
     vecAllIDs = "characterORNULL", dfAnnotationProc = "data.frame", vecSizeFactors = "numeric", 
-    vecDispersions = "numeric", boolCaseCtrl = "logical", vecConfounders = "characterORNULL", 
+    vecDispersions = "numeric", boolCaseCtrl = "logical", 
+    boolBeta2 = "logical",
+    vecConfounders = "characterORNULL", 
+    vecCovariates = "characterORNULL", 
     scaNProc = "numeric", scaQThres = "numericORNULL", strReport = "characterORNULL"))
 
 ### 2. Enable accession of private elements via functions
@@ -225,7 +234,9 @@ setClass("ImpulseDE2Object", slots = c(
 #' get_vecSizeFactors
 #' get_vecDispersions 
 #' get_boolCaseCtrl
+#' get_boolBeta2
 #' get_vecConfounders 
+#' get_vecCovariates
 #' get_scaNProc
 #' get_scaQThres
 #' get_strReport
@@ -244,7 +255,9 @@ setClass("ImpulseDE2Object", slots = c(
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
+#' boolBeta2       = FALSE,
 #' vecConfounders  = NULL,
+#' vecCovariates   = NULL,
 #' scaNProc        = 1 )
 #' # Extract hidden auxillary result and processed input objects.
 #' lsModelFits <- get_lsModelFits(objectImpulseDE2)
@@ -254,7 +267,9 @@ setClass("ImpulseDE2Object", slots = c(
 #' vecSizeFactors <- get_vecSizeFactors(objectImpulseDE2)
 #' vecDispersions <- get_vecDispersions(objectImpulseDE2)
 #' boolCaseCtrl <- get_boolCaseCtrl(objectImpulseDE2)
+#' boolBeta2 <- get_boolBeta2(objectImpulseDE2)
 #' vecConfounders <- get_vecConfounders(objectImpulseDE2)
+#' vecCovariates <- get_vecConfounders(objectImpulseDE2)
 #' scaNProc <- get_scaNProc(objectImpulseDE2)
 #' scaQThres <- get_scaQThres(objectImpulseDE2)
 #' strReport <- get_strReport(objectImpulseDE2)
@@ -299,8 +314,18 @@ get_boolCaseCtrl <- function(obj)
 
 #' @rdname get_accessors
 #' @export
+get_boolBeta2 <- function(obj) 
+    return(obj@boolBeta2)
+
+#' @rdname get_accessors
+#' @export
 get_vecConfounders <- function(obj) 
     return(obj@vecConfounders)
+
+#' @rdname get_accessors
+#' @export
+get_vecCovariates <- function(obj) 
+    return(obj@vecCovariates)
 
 #' @rdname get_accessors
 #' @export
@@ -330,12 +355,14 @@ get_strReport <- function(obj)
 #' 
 #' @aliases 
 #' set_boolCaseCtrl
+#' set_boolBeta2
 #' set_dfAnnotationProc
 #' set_dfImpulseDE2Results
 #' set_lsModelFits
 #' set_matCountDataProc
 #' set_vecAllIDs
 #' set_vecConfounders
+#' set_vecCovariates
 #' set_vecDEGenes
 #' set_vecDispersions
 #' set_vecSizeFactors 
@@ -352,6 +379,12 @@ NULL
 #' @name set_accessors
 set_boolCaseCtrl <- function(obj,element) {
     obj@boolCaseCtrl <- element
+    return(obj)
+}
+
+#' @name set_accessors
+set_boolBeta2 <- function(obj,element) {
+    obj@boolBeta2 <- element
     return(obj)
 }
 
@@ -410,6 +443,12 @@ set_vecConfounders <- function(obj,element) {
 }
 
 #' @name set_accessors
+set_vecCovariates <- function(obj,element) {
+    obj@vecCovariates <- element
+    return(obj)
+}
+
+#' @name set_accessors
 set_vecDEGenes <- function(obj,element) {
     obj@vecDEGenes <- element
     return(obj)
@@ -456,7 +495,9 @@ set_vecSizeFactors <- function(obj,element) {
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
+#' boolBeta2       = FALSE,
 #' vecConfounders  = NULL,
+#' vecCovariates   = NULL,
 #' scaNProc        = 1 )
 #' names(objectImpulseDE2) # Display core output
 #' # With respect to this core output, objectImpulseDE2
@@ -543,7 +584,9 @@ append_strReport <- function(obj,s) {
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
+#' boolBeta2       = FALSE,
 #' vecConfounders  = NULL,
+#' vecCovariates   = NULL,
 #' scaNProc        = 1 )
 #' # Uncomment to run:
 #' #writeReportToFile(
