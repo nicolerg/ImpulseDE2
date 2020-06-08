@@ -279,22 +279,30 @@ fitConstModel <- function(
     }
     scaNParamUsed <- 1
     if (!is.null(lsvecidxBatch)) {
-        lsvecBatchFactors <- list()
-        for(i in seq(1,length(lsvecidxBatch))) {
-            vecidxConfounder <- lsvecidxBatch[[i]]
-            scaNBatchFactors <- max(vecidxConfounder) - 1  
-            # Batches are counted from 1
-            # Factor of first batch is one (constant), the remaining 
-            # factors scale based on the first batch.
-            vecBatchFactors <- c(1, exp(lsFit$par[
-                (scaNParamUsed + 1):
-                    (scaNParamUsed + scaNBatchFactors)] ))
-            scaNParamUsed <- scaNParamUsed + scaNBatchFactors
-            # Catch boundary of likelihood domain on batch factor space:
-            vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
-            vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
-            lsvecBatchFactors[[i]] <- vecBatchFactors
-        }
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
+
+        vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
+        lsvecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
+        lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
+        names(lsvecBatchFactors) <- colnames(matBatchFactors)
+
+        #lsvecBatchFactors <- list()
+        #for(i in seq(1,length(lsvecidxBatch))) {
+            #vecidxConfounder <- lsvecidxBatch[[i]]
+            #scaNBatchFactors <- max(vecidxConfounder) - 1  
+            ## Batches are counted from 1
+            ## Factor of first batch is one (constant), the remaining 
+            ## factors scale based on the first batch.
+            #vecBatchFactors <- c(1, exp(lsFit$par[
+                #(scaNParamUsed + 1):
+                    #(scaNParamUsed + scaNBatchFactors)] ))
+            #scaNParamUsed <- scaNParamUsed + scaNBatchFactors
+            ## Catch boundary of likelihood domain on batch factor space:
+            #vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
+            #vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
+            #lsvecBatchFactors[[i]] <- vecBatchFactors
+        #}
     } else {
         lsvecBatchFactors <- NULL
     }
@@ -434,22 +442,30 @@ fitImpulseModel <- function(
         vecTimepoints = vecTimepointsUnique)[vecidxTimepoint]
     names(vecImpulseValue) <- names(vecCounts)
     if (!is.null(lsvecidxBatch)) {
-        lsvecBatchFactors <- list()
-        for(i in seq(1,length(lsvecidxBatch))) {
-            vecidxConfounder <- lsvecidxBatch[[i]]
-            scaNBatchFactors <- max(vecidxConfounder) - 1  
-            # Batches are counted from 1
-            # Factor of first batch is one (constant), the remaining 
-            # factors scale based on the first batch.
-            vecBatchFactors <- c(1, exp(lsFit$par[
-                (scaNParamUsed + 1):
-                    (scaNParamUsed + scaNBatchFactors)] ))
-            scaNParamUsed <- scaNParamUsed + scaNBatchFactors
-            # Catch boundary of likelihood domain on batch factor space:
-            vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
-            vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
-            lsvecBatchFactors[[i]] <- vecBatchFactors
-        }
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
+
+        vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
+        lsvecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
+        lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
+        names(lsvecBatchFactors) <- colnames(matBatchFactors)
+
+        #lsvecBatchFactors <- list()
+        #for(i in seq(1,length(lsvecidxBatch))) {
+            #vecidxConfounder <- lsvecidxBatch[[i]]
+            #scaNBatchFactors <- max(vecidxConfounder) - 1  
+            ## Batches are counted from 1
+            ## Factor of first batch is one (constant), the remaining 
+            ## factors scale based on the first batch.
+            #vecBatchFactors <- c(1, exp(lsFit$par[
+                #(scaNParamUsed + 1):
+                    #(scaNParamUsed + scaNBatchFactors)] ))
+            #scaNParamUsed <- scaNParamUsed + scaNBatchFactors
+            ## Catch boundary of likelihood domain on batch factor space:
+            #vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
+            #vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
+            #lsvecBatchFactors[[i]] <- vecBatchFactors
+        #}
     } else {
         lsvecBatchFactors <- NULL
     }
