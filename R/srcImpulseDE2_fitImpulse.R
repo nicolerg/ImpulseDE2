@@ -253,6 +253,11 @@ fitConstModel <- function(
     }
     scaNParamUsed <- 1
     if (!is.null(lsvecidxBatch)) {
+        ##################################
+        ##
+        ## danachun is going to fix this 
+        ##
+        ##################################
         lsvecBatchFactors <- list()
         for(i in seq(1,length(lsvecidxBatch))) {
             vecidxConfounder <- lsvecidxBatch[[i]]
