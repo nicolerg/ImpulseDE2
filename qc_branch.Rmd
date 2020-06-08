@@ -37,15 +37,15 @@ for(f in list.files()){
 ```{r simulate data}
 # case-only with batch effects
 lsSimulatedData <- simulateDataSetImpulseDE2(
-  vecTimePointsA   = rep(seq(1,8),3),
+  vecTimePointsA   = rep(seq(1,8),4),
   vecTimePointsB   = NULL,
-  vecBatchesA      = c(rep("B1",8), rep("B2",8), rep("B3",8)),
+  vecBatchesA      = c(rep("B1",15), rep("B2",17)),
   vecBatchesB      = NULL,
   scaNConst        = 30,
   scaNImp          = 50,
   scaNLin          = 10,
   scaNSig          = 30,
-  scaMuBatchEffect = 1,
+  scaMuBatchEffect = 3,
   scaSDBatchEffect = 0.2,
   dirOutSimulation = NULL)
 ```
@@ -77,6 +77,25 @@ boolBeta2 = TRUE
 scaQThres = NULL
 ```
 
+## Check to see if covariates affect dispersions
+```{r deseq dispersions}
+dds1 <- DESeqDataSetFromMatrix(
+    countData = matCountData,
+    colData = dfAnnotation,
+    design = ~ Time)
+dds1 <- estimateSizeFactors(dds1)
+dds1 <- estimateDispersions(dds1)
+
+dds2 <- DESeqDataSetFromMatrix(
+    countData = matCountData,
+    colData = dfAnnotation,
+    design = ~ 1)
+dds2 <- estimateSizeFactors(dds2)
+dds2 <- estimateDispersions(dds2)
+
+dispersions(dds1) == dispersions(dds2)
+```
+
 ```{r processData}
 objectImpulseDE2 = runImpulseDE2(
     matCountData = matCountData, 
@@ -89,6 +108,19 @@ objectImpulseDE2 = runImpulseDE2(
     scaNProc = 1,
     MAXIT = 5000) 
 modelFits = get_lsModelFits(obj=objectImpulseDE2)
+modelFits$case$gene71$lsImpulseFit$vecImpulseParam
+
+withCov = runImpulseDE2(
+    matCountData = matCountData, 
+    dfAnnotation = dfAnnotation, 
+    boolCaseCtrl = FALSE,
+    boolBeta2 = TRUE,
+    boolIdentifyTransients = TRUE,
+    vecConfounders = vecConfounders,
+    vecCovariates = vecCovariates,
+    scaNProc = 1,
+    MAXIT = 5000) 
+modelFits = get_lsModelFits(obj=withCov)
 modelFits$case$gene71$lsImpulseFit$vecImpulseParam
 
 singleBeta = runImpulseDE2(
@@ -108,6 +140,17 @@ lsgplotsGenes <- plotGenes(
   vecGeneIDs       = objectImpulseDE2$dfImpulseDE2Results[dfres$isTransient == TRUE, "Gene"],
   #scaNTopIDs       = 10,
   objectImpulseDE2 = objectImpulseDE2,
+  boolCaseCtrl     = FALSE,
+  dirOut           = NULL,
+  strFileName      = NULL,
+  vecRefPval       = NULL, 
+  strNameRefMethod = NULL)
+print(lsgplotsGenes[[1]])
+
+lsgplotsGenes <- plotGenes(
+  vecGeneIDs       = "gene71",
+  #scaNTopIDs       = 10,
+  objectImpulseDE2 = withCov,
   boolCaseCtrl     = FALSE,
   dirOut           = NULL,
   strFileName      = NULL,

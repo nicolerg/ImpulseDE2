@@ -32,32 +32,32 @@
 #' @seealso Called by \link{runImpulseDE2}.
 #' 
 #' @param matCountData (matrix genes x samples) [Default NULL] 
-#'    Read count data, unobserved entries are NA.
+#' Read count data, unobserved entries are NA.
 #' @param dfAnnotation (data frame samples x covariates) 
-#'    {Sample, Condition, Time (numeric), TimeCateg (str)
-#'    (and confounding variables if given).}
-#'    Annotation table with covariates for each sample.
+#' {Sample, Condition, Time (numeric), TimeCateg (str)
+#' (and confounding variables if given).}
+#' Annotation table with covariates for each sample.
 #' @param boolCaseCtrl (bool) 
-#' 		Whether to perform case-control analysis. Does case-only
-#' 		analysis if FALSE.
+#' Whether to perform case-control analysis. Does case-only
+#' analysis if FALSE.
 #' @param boolBeta2 (bool)
-#'      Whether to model two different slopes for impulse model instead of 
-#'      assuming onset slope and offset slope are identical.
-#' @param vecConfounders (vector of strings number of confounding variables)
-#' 		Factors to correct for during batch correction. Have to 
-#' 		supply dispersion factors if more than one is supplied.
-#' 		Names refer to columns in dfAnnotation.
-#' @param VecCovariates (vector of strings number of covariates)
-#'      Covariates to adjust for during differential analysis.
-#'      Names refer to columns in dfAnnotation.
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param vecCovFactor (vector of strings number of categorical covariates)
+#' Categorial covariates to adjust for.
+#' Names refer to columns in dfAnnotation.
+#' @param vecCovContinuous (vector of strings number of continuous covariates)
+#' Continuous covariates to adjust for.
+#' Names refer to columns in dfAnnotation.
+
 #' @param vecDispersionsExternal (vector length number of
-#'    genes in matCountData) [Default NULL]
-#'    Externally generated list of gene-wise dispersion factors
-#'    which overides DESeq2 generated dispersion factors.
+#' genes in matCountData) [Default NULL]
+#' Externally generated list of gene-wise dispersion factors
+#' which overides DESeq2 generated dispersion factors.
 #' @param vecSizeFactorsExternal (vector length number of
-#'    cells in matCountData) [Default NULL]
-#'    Externally generated list of size factors which override
-#'    size factor computation in ImpulseDE2.
+#' cells in matCountData) [Default NULL]
+#' Externally generated list of size factors which override
+#' size factor computation in ImpulseDE2.
 #'    
 #' @return (list length 4)
 #' \itemize{
@@ -81,8 +81,8 @@ processData <- function(
     matCountData,
     boolCaseCtrl, 
     boolBeta2,
-    vecConfounders,
-    vecCovariates,
+    vecCovFactor,
+    vecCovContinuous,
     vecDispersionsExternal,
     vecSizeFactorsExternal){
     
@@ -166,8 +166,8 @@ processData <- function(
         matCountData,
         boolCaseCtrl,
         boolBeta2, 
-        vecConfounders,
-        vecCovariates,
+        vecCovFactor,
+        vecCovContinuous,
         vecDispersionsExternal,
         vecSizeFactorsExternal,
         strReportProcessing){
@@ -183,7 +183,7 @@ processData <- function(
         ### 2. Check annotation table content
         ### a) Check column names
         vecColNamesRequired <- c("Sample","Condition","Time",
-                                 vecConfounders, vecCovariates)
+                                 vecCovFactor, vecCovContinuous)
         if( !all(vecColNamesRequired %in% 
                  colnames(dfAnnotation)) ){
             stop(paste0(
@@ -221,8 +221,8 @@ processData <- function(
                     " not occur in annotation table condition column."))
             }
         }
-        ### e) Batch
-        if(!is.null(vecConfounders)){
+        ### e) Factor variables
+        if(!is.null(vecCovFactor)){
             # Dummy check: Check that number of batches 
             # for each confounding variable is > 1
             for(confounder in vecConfounders){
