@@ -51,18 +51,26 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
     if (!is.null(lsvecidxBatch)) {
         # Estimate batch factors
         vecBatchFactors <- array(1, length(vecCounts))
-        for (vecidxBatch in lsvecidxBatch) {
-            vecBatchFactorsConfounder <- tapply(
-                vecCountsSFcorrectedNorm, 
-                vecidxBatch, 
-                mean, na.rm=TRUE)
-            # Catch exception that all observations of a batch are zero or all
-            # observations are zero:
-            vecBatchFactorsConfounder[is.na(vecBatchFactorsConfounder) | 
-                                          vecBatchFactorsConfounder == 0] <- 1
-            vecBatchFactors <- vecBatchFactors * 
-                vecBatchFactorsConfounder[vecidxBatch]
-        }
+
+        lmBatchFactors <- lm(vecCountsSFcorrectedNorm ~ ., lsvecidxBatch)
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)
+        coefBatchFactors <- coef(lmBatchFactors)
+        vecBatchFactors <- t(matBatchFactors %*% coefBatchFactors)
+        vecBatchFactors[is.na(vecBatchFactors) | vecBatchFactors == 0] <- 1
+
+        #for (vecidxBatch in lsvecidxBatch) {
+            #vecBatchFactorsConfounder <- tapply(
+                #vecCountsSFcorrectedNorm, 
+                #vecidxBatch, 
+                #mean, na.rm=TRUE)
+            ## Catch exception that all observations of a batch are zero or all
+            ## observations are zero:
+            #vecBatchFactorsConfounder[is.na(vecBatchFactorsConfounder) | 
+                                          #vecBatchFactorsConfounder == 0] <- 1
+            #vecBatchFactors <- vecBatchFactors * 
+                #vecBatchFactorsConfounder[vecidxBatch]
+        #}
+
         vecCountsSFBatchcorrected <- vecCountsSFcorrected/vecBatchFactors
         vecExpressionMeans <- tapply(
             vecCountsSFBatchcorrected, 

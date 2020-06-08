@@ -45,25 +45,34 @@ evalLogLikMu <- function(
     if (scaMu < 10^(-10)) {
         scaMu <- 10^(-10)
     }
+
     
     vecBatchFactors <- array(1, length(vecCounts))
     if (!is.null(lsvecidxBatch)) {
-        for (vecidxConfounder in lsvecidxBatch) {
-            scaNBatchFactors <- max(vecidxConfounder) - 1  
-            # Batches are counted from 1
-            # Factor of first batch is one (constant), the remaining 
-            # factors scale based on the first batch.
-            vecBatchFacConf <- c(
-                1, exp(vecTheta[(scaNParamUsed + 1):
-                                    (scaNParamUsed + scaNBatchFactors)])
-            )[vecidxConfounder]
-            scaNParamUsed <- scaNParamUsed + scaNBatchFactors
-            # Prevent batch factor shrinkage and explosion:
-            vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
-            vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
+        #Now assuming that lsvecidxBatch is a dataframe containing only the covariates
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
+
+        vecThetaCovar <- vecTheta[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
+        vecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
+        vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
+
+        #for (vecidxConfounder in lsvecidxBatch) {
+            #scaNBatchFactors <- max(vecidxConfounder) - 1  
+            ## Batches are counted from 1
+            ## Factor of first batch is one (constant), the remaining 
+            ## factors scale based on the first batch.
+            #vecBatchFacConf <- c(
+                #1, exp(vecTheta[(scaNParamUsed + 1):
+                                    #(scaNParamUsed + scaNBatchFactors)])
+            #)[vecidxConfounder]
+            #scaNParamUsed <- scaNParamUsed + scaNBatchFactors
+            ## Prevent batch factor shrinkage and explosion:
+            #vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
+            #vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
             
-            vecBatchFactors <- vecBatchFactors * vecBatchFacConf
-        }
+            #vecBatchFactors <- vecBatchFactors * vecBatchFacConf
+        #}
     }
     
     # Compute log likelihood under constant model by adding log likelihood
@@ -171,22 +180,30 @@ evalLogLikImpulse <- function(
     
     vecBatchFactors <- array(1, length(vecCounts))
     if (!is.null(lsvecidxBatch)) {
-        for (vecidxConfounder in lsvecidxBatch) {
-            scaNBatchFactors <- max(vecidxConfounder) - 1  
-            # Batches are counted from 1
-            # Factor of first batch is one (constant), the remaining 
-            # factors scale based on the first batch.
-            vecBatchFacConf <- c(
-                1, exp(vecTheta[(scaNParamUsed +1):
-                                    (scaNParamUsed + scaNBatchFactors)])
-            )[vecidxConfounder]
-            scaNParamUsed <- scaNParamUsed + scaNBatchFactors
-            # Prevent batch factor shrinkage and explosion:
-            vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
-            vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
+        #Now assuming that lsvecidxBatch is a dataframe containing only the covariates
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
+
+        vecThetaCovar <- vecTheta[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
+        vecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
+        vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
+
+        #for (vecidxConfounder in lsvecidxBatch) {
+            #scaNBatchFactors <- max(vecidxConfounder) - 1  
+            ## Batches are counted from 1
+            ## Factor of first batch is one (constant), the remaining 
+            ## factors scale based on the first batch.
+            #vecBatchFacConf <- c(
+                #1, exp(vecTheta[(scaNParamUsed +1):
+                                    #(scaNParamUsed + scaNBatchFactors)])
+            #)[vecidxConfounder]
+            #scaNParamUsed <- scaNParamUsed + scaNBatchFactors
+            ## Prevent batch factor shrinkage and explosion:
+            #vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
+            #vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
             
-            vecBatchFactors <- vecBatchFactors * vecBatchFacConf
-        }
+            #vecBatchFactors <- vecBatchFactors * vecBatchFacConf
+        #}
     }
     
     # Compute log likelihood under impulse model by adding log likelihood of
@@ -290,22 +307,29 @@ evalLogLikSigmoid <- function(
     
     vecBatchFactors <- array(1, length(vecCounts))
     if (!is.null(lsvecidxBatch)) {
-        for (vecidxConfounder in lsvecidxBatch) {
-            scaNBatchFactors <- max(vecidxConfounder) - 1  
-            # Batches are counted from 1
-            # Factor of first batch is one (constant), the remaining 
-            # factors scale based on the first batch.
-            vecBatchFacConf <- c(
-                1, exp(vecTheta[(scaNParamUsed +1):
-                                    (scaNParamUsed + scaNBatchFactors)])
-            )[vecidxConfounder]
-            scaNParamUsed <- scaNParamUsed + scaNBatchFactors
-            # Prevent batch factor shrinkage and explosion:
-            vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
-            vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
+        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
+
+        vecThetaCovar <- vecTheta[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
+        vecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        vecBatchFactors[vecBatchFactors < 10^(-10)] <- 10^(-10)
+        vecBatchFactors[vecBatchFactors > 10^(10)] <- 10^(10)
+
+        #for (vecidxConfounder in lsvecidxBatch) {
+            #scaNBatchFactors <- max(vecidxConfounder) - 1  
+            ## Batches are counted from 1
+            ## Factor of first batch is one (constant), the remaining 
+            ## factors scale based on the first batch.
+            #vecBatchFacConf <- c(
+                #1, exp(vecTheta[(scaNParamUsed +1):
+                                    #(scaNParamUsed + scaNBatchFactors)])
+            #)[vecidxConfounder]
+            #scaNParamUsed <- scaNParamUsed + scaNBatchFactors
+            ## Prevent batch factor shrinkage and explosion:
+            #vecBatchFacConf[vecBatchFacConf < 10^(-10)] <- 10^(-10)
+            #vecBatchFacConf[vecBatchFacConf > 10^(10)] <- 10^(10)
             
-            vecBatchFactors <- vecBatchFactors * vecBatchFacConf
-        }
+            #vecBatchFactors <- vecBatchFactors * vecBatchFacConf
+        #}
     }
     
     # Compute log likelihood under impulse model by adding log likelihood of
