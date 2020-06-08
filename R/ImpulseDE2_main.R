@@ -229,7 +229,8 @@ runImpulseDE2 <- function(
             vecSizeFactorsExternal = vecSizeFactorsExternal)
         
         matCountDataProc <- lsProcessedData$matCountDataProc
-        dfAnnotationProc <- lsProcessedData$dfAnnotationProc
+        dfDESeqAnnotationProc <- lsProcessedData$dfDESeqAnnotationProc
+        lsdfCovProc <- lsProcessedData$lsdfCovProc
         vecSizeFactorsExternalProc <- 
             lsProcessedData$vecSizeFactorsExternalProc
         vecDispersionsExternalProc <- 
@@ -254,7 +255,7 @@ runImpulseDE2 <- function(
             strReport <- paste0(strReport, "\n", strMessage)
             tm_runDESeq2 <- system.time({
                 vecDispersions <- runDESeq2(
-                    dfAnnotationProc = dfAnnotationProc, 
+                    dfAnnotationProc = dfDESeqAnnotationProc, 
                     matCountDataProc = matCountDataProc, 
                     boolCaseCtrl = boolCaseCtrl, 
                     vecCovFactor = vecCovFactor,
@@ -288,7 +289,8 @@ runImpulseDE2 <- function(
             lsModelFits = NULL, 
             matCountDataProc = matCountDataProc, 
             vecAllIDs = rownames(matCountData), 
-            dfAnnotationProc = dfAnnotationProc, 
+            dfDESeqAnnotationProc = dfDESeqAnnotationProc, 
+            lsdfCovProc = lsdfCovProc,
             vecSizeFactors = vecSizeFactors, 
             vecDispersions = vecDispersions, 
             boolCaseCtrl = boolCaseCtrl, 

@@ -18,12 +18,7 @@
 #' @param vecSizeFactors (numeric vector number of samples) 
 #' Model scaling factors for each sample which take
 #' sequencing depth into account (size factors).
-#' @param lsvecidxBatch (list length number of confounding variables)
-#' List of index vectors. 
-#' One vector per confounding variable.
-#' Each vector has one entry per sample with the index batch
-#' within the given confounding variable of the given sample.
-#' Batches are enumerated from 1 to number of batches.
+#' @param dfCovProc
 #' @param boolBeta2 (bool)
 #' Whether to model two different slopes for impulse model instead of 
 #' assuming onset slope and offset slope are identical.
@@ -40,7 +35,7 @@
 #' 
 #' @author David Sebastian Fischer
 estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors, 
-                                 lsvecidxBatch, boolBeta2) {
+                                 dfCovProc, boolBeta2) {
     
     # Compute general statistics for initialisation:
     vecTimepointsUnique <- unique(vecTimepoints)
@@ -48,28 +43,15 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
     # Expression means by timepoint
     vecCountsSFcorrected <- vecCounts/vecSizeFactors
     vecCountsSFcorrectedNorm <- vecCountsSFcorrected / scaMeanCount
-    if (!is.null(lsvecidxBatch)) {
+    if (!is.null(lsdfCovProc)) {
         # Estimate batch factors
         vecBatchFactors <- array(1, length(vecCounts))
 
-        lmBatchFactors <- lm(vecCountsSFcorrectedNorm ~ ., lsvecidxBatch)
-        matBatchFactors <- model.matrix(~ ., lsvecidxBatch)
+        lmBatchFactors <- lm(vecCountsSFcorrectedNorm ~ ., dfCovProc)
+        matBatchFactors <- model.matrix(~ ., dfCovProc)
         coefBatchFactors <- coef(lmBatchFactors)
         vecBatchFactors <- t(matBatchFactors %*% coefBatchFactors)
         vecBatchFactors[is.na(vecBatchFactors) | vecBatchFactors == 0] <- 1
-
-        #for (vecidxBatch in lsvecidxBatch) {
-            #vecBatchFactorsConfounder <- tapply(
-                #vecCountsSFcorrectedNorm, 
-                #vecidxBatch, 
-                #mean, na.rm=TRUE)
-            ## Catch exception that all observations of a batch are zero or all
-            ## observations are zero:
-            #vecBatchFactorsConfounder[is.na(vecBatchFactorsConfounder) | 
-                                          #vecBatchFactorsConfounder == 0] <- 1
-            #vecBatchFactors <- vecBatchFactors * 
-                #vecBatchFactorsConfounder[vecidxBatch]
-        #}
 
         vecCountsSFBatchcorrected <- vecCountsSFcorrected/vecBatchFactors
         vecExpressionMeans <- tapply(
@@ -142,7 +124,6 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
         )
     }
 
-    
     # Compute valley initialisation Beta: Has to be negative, Theta1: High,
     # Theta2: Low, Theta3: High t1: Around first observed inflexion point,
     # t2: Around second observed inflexion point
@@ -200,12 +181,7 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' @param vecSizeFactors (numeric vector number of samples) 
 #' Model scaling factors for each sample which take
 #' sequencing depth into account (size factors).
-#' @param lsvecidxBatch (list length number of confounding variables)
-#' List of index vectors. 
-#' One vector per confounding variable.
-#' Each vector has one entry per sample with the index batch
-#' within the given confounding variable of the given sample.
-#' Batches are enumerated from 1 to number of batches.
+#' @param dfCovProc
 #' @param MAXIT (scalar) [Default 1000] 
 #' Maximum number of BFGS iterations for model fitting with \link{optim}.
 #' @param RELTOL (scalar) [Default 10^(-8)]
@@ -220,10 +196,10 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' \itemize{
 #' \item scaMu (scalar) Maximum likelihood estimator of
 #' negative binomial mean parameter.
-#' \item lsvecBatchFactors (list length number of confounders)
+#' \item lsvecBatchFactors (list length number of vecCovFactor and vecCovContinuous)
 #' List of vectors of scalar batch correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -234,15 +210,13 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' 
 #' @author David Sebastian Fischer
 fitConstModel <- function(
-    vecCounts, scaDisp, vecSizeFactors, lsvecidxBatch,
+    vecCounts, scaDisp, vecSizeFactors, dfCovProc,
     MAXIT = 1000, RELTOL = 10^(-8), trace = 0, REPORT = 10) {
     
     vecParamGuess <- log(mean(vecCounts, na.rm = TRUE) + 1) # constant value
-    if (!is.null(lsvecidxBatch)) {
-        for (vecidxConfounder in lsvecidxBatch) {
-            vecParamGuess <- c(vecParamGuess, 
-                               rep(0, length(unique(vecidxConfounder)) - 1))
-        }
+    if (!is.null(dfCovProc)) {
+        modelMat = model.matrix(~., dfCovProc)[,-1]
+        vecParamGuess <- c(vecParamGuess, rep(0, ncol(modelMat)))
     }
     
     lsFit <- tryCatch({
@@ -264,8 +238,8 @@ fitConstModel <- function(
                      paste(scaDisp, collapse = " ")))
         print(paste0("vecSizeFactors ", 
                      paste(vecSizeFactors, collapse = " ")))
-        print(paste0("lsvecidxBatch ", 
-                     paste(lsvecidxBatch, collapse = " ")))
+        print(paste0("dfCovProc cols ", 
+                     paste(colnames(dfCovProc), collapse = " ")))
         print(paste0("MAXIT ", MAXIT))
         print(strErrorMsg)
         stop(strErrorMsg)
