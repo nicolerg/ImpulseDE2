@@ -29,11 +29,11 @@ NULL
 #' \item dfAnnotation
 #' \item boolCaseCtrl
 #' \item boolBeta2
-#' \item vecConfounders
 #' }
 #' Additionally, you can provide:
 #' \itemize{
-#' \item vecCovariates to specify additional covariates to adjust for.
+#' \item vecCovFactor to specify additional categorial covariates to adjust for.
+#' \item vecCovContinuous to specify additional continous covariates to adjust for.
 #' \item scaNProc to set the number of processes for parallelisation.
 #' \item scaQThres to set the cut off for your DE gene list. 
 #' \item vecDispersionsExternal to supply external dispersion parameters
@@ -69,7 +69,7 @@ NULL
 #' Can be SummarizedExperiment object.
 #' @param dfAnnotation (data frame samples x covariates) 
 #' {Sample, Condition, Time (numeric), TimeCateg (str)
-#' (and confounding variables if given).}
+#' (and additional covariates if given).}
 #' Annotation table with covariates for each sample.
 #' @param boolCaseCtrl (bool) [Default FALSE]
 #' Whether to perform case-control analysis. Does case-only
@@ -77,12 +77,11 @@ NULL
 #' @param boolBeta2 (bool) [Default FALSE]
 #' Whether to model two different slopes for impulse model instead of 
 #' assuming onset slope and offset slope are identical.
-#' @param vecConfounders (vector of strings number of confounding variables)
-#' Factors to correct for during batch correction. Have to 
-#' supply dispersion factors if more than one is supplied.
+#' @param vecCovFactor (vector of strings number of categorical covariates)
+#' Categorial covariates to adjust for.
 #' Names refer to columns in dfAnnotation.
-#' @param vecCovariates (vector of stings number of covaraites)
-#' Covariates to adjust for when running DESeq.
+#' @param vecCovContinuous (vector of strings number of continuous covariates)
+#' Continuous covariates to adjust for.
 #' Names refer to columns in dfAnnotation.
 #' @param scaNProc (scalar) [Default 1] Number of processes for 
 #' parallelisation.
@@ -178,26 +177,30 @@ NULL
 #' scaNLin          = 10,
 #' scaNSig          = 10)
 #' objectImpulseDE2 <- runImpulseDE2(
-#' matCountData    = lsSimulatedData$matObservedCounts, 
-#' dfAnnotation    = lsSimulatedData$dfAnnotation,
-#' boolCaseCtrl    = FALSE,
-#' boolBeta2       = FALSE,
-#' vecConfounders  = NULL,
-#' vecCovariates   = NULL,
-#' scaNProc        = 1 )
+#' matCountData     = lsSimulatedData$matObservedCounts, 
+#' dfAnnotation     = lsSimulatedData$dfAnnotation,
+#' boolCaseCtrl     = FALSE,
+#' boolBeta2        = FALSE,
+#' vecCovFactor     = NULL,
+#' vecCovContinuous = NULL,
+#' scaNProc         = 1 )
 #' head(objectImpulseDE2$dfImpulseDE2Results)
 #' 
 #' @author David Sebastian Fischer
 #' 
 #' @export
 runImpulseDE2 <- function(
-    matCountData = NULL, dfAnnotation = NULL, boolCaseCtrl = FALSE, 
+    matCountData = NULL, 
+    dfAnnotation = NULL, 
+    boolCaseCtrl = FALSE, 
     boolBeta2 = FALSE,
-    vecConfounders = NULL, 
-    vecCovariates = NULL,
-    scaNProc = 1, scaQThres = NULL, 
+    vecCovFactor = NULL, 
+    vecCovContinuous = NULL,
+    scaNProc = 1, 
+    scaQThres = NULL, 
     vecDispersionsExternal = NULL, 
-    vecSizeFactorsExternal = NULL, boolIdentifyTransients = FALSE, 
+    vecSizeFactorsExternal = NULL, 
+    boolIdentifyTransients = FALSE, 
     boolVerbose = TRUE,
     MAXIT = 1000) {
     
@@ -216,16 +219,18 @@ runImpulseDE2 <- function(
             matCountData <- assay(matCountData)
         }
         lsProcessedData <- processData(
-            dfAnnotation = dfAnnotation, matCountData = matCountData, 
+            dfAnnotation = dfAnnotation, 
+            matCountData = matCountData, 
             boolCaseCtrl = boolCaseCtrl, 
             boolBeta2 = boolBeta2,
-            vecConfounders = vecConfounders, 
-            vecCovariates = vecCovariates,
+            vecCovFactor = vecCovFactor, 
+            vecCovContinuous = vecCovContinuous,
             vecDispersionsExternal = vecDispersionsExternal, 
             vecSizeFactorsExternal = vecSizeFactorsExternal)
         
         matCountDataProc <- lsProcessedData$matCountDataProc
-        dfAnnotationProc <- lsProcessedData$dfAnnotationProc
+        dfDESeqAnnotationProc <- lsProcessedData$dfDESeqAnnotationProc
+        lsdfCovProc <- lsProcessedData$lsdfCovProc
         vecSizeFactorsExternalProc <- 
             lsProcessedData$vecSizeFactorsExternalProc
         vecDispersionsExternalProc <- 
@@ -250,11 +255,11 @@ runImpulseDE2 <- function(
             strReport <- paste0(strReport, "\n", strMessage)
             tm_runDESeq2 <- system.time({
                 vecDispersions <- runDESeq2(
-                    dfAnnotationProc = dfAnnotationProc, 
+                    dfAnnotationProc = dfDESeqAnnotationProc, 
                     matCountDataProc = matCountDataProc, 
                     boolCaseCtrl = boolCaseCtrl, 
-                    vecConfounders = vecConfounders,
-                    vecCovariates = vecCovariates)
+                    vecCovFactor = vecCovFactor,
+                    vecCovContinuous = vecCovContinuous)
             })
             strMessage <- paste0("Consumed time: ", 
                                  round(tm_runDESeq2["elapsed"]/60,2), " min.")
@@ -278,17 +283,23 @@ runImpulseDE2 <- function(
         
         # 4. Create instance of ImpulseDE2Object Create ImpulseDE2 object
         objectImpulseDE2 <- new(
-            "ImpulseDE2Object", dfImpulseDE2Results = NULL, 
-            vecDEGenes = NULL, lsModelFits = NULL, 
+            "ImpulseDE2Object", 
+            dfImpulseDE2Results = NULL, 
+            vecDEGenes = NULL, 
+            lsModelFits = NULL, 
             matCountDataProc = matCountDataProc, 
             vecAllIDs = rownames(matCountData), 
-            dfAnnotationProc = dfAnnotationProc, 
-            vecSizeFactors = vecSizeFactors, vecDispersions = vecDispersions, 
+            dfDESeqAnnotationProc = dfDESeqAnnotationProc, 
+            lsdfCovProc = lsdfCovProc,
+            vecSizeFactors = vecSizeFactors, 
+            vecDispersions = vecDispersions, 
             boolCaseCtrl = boolCaseCtrl, 
             boolBeta2 = boolBeta2,
-            vecConfounders = vecConfounders, 
-            vecCovariates = vecCovariates,
-            scaNProc = scaNProc, scaQThres = scaQThres, strReport = strReport)
+            vecCovFactor = vecCovFactor, 
+            vecCovContinuous = vecCovContinuous,
+            scaNProc = scaNProc, 
+            scaQThres = scaQThres, 
+            strReport = strReport)
         
         # 5. Fit null and alternative model to each gene
         strMessage <- "# Fitting null and alternative model to the genes"
@@ -298,7 +309,8 @@ runImpulseDE2 <- function(
         tm_fitImpulse <- system.time({
             objectImpulseDE2 <- fitModels(
                 objectImpulseDE2 = objectImpulseDE2, 
-                vecConfounders = vecConfounders, 
+                vecCovFactor = vecCovFactor,
+                vecCovContinuous = vecCovContinuous, 
                 boolCaseCtrl = boolCaseCtrl,
                 boolBeta2 = boolBeta2,
                 MAXIT = MAXIT)
@@ -318,7 +330,8 @@ runImpulseDE2 <- function(
             tm_fitSigmoid <- system.time({
                 objectImpulseDE2 <- fitSigmoidModels(
                     objectImpulseDE2 = objectImpulseDE2, 
-                    vecConfounders = vecConfounders, 
+                    vecCovFactor = vecCovFactor,
+                    vecCovContinuous = vecCovContinuous, 
                     strCondition = "case",
                     MAXIT = MAXIT)
             })

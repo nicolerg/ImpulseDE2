@@ -97,17 +97,6 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' \item vecidxTimepoint (idx vector length number of samples)
 #' Index of the time coordinates of each sample (reference is
 #' vecTimepointsUnique).
-#' \item lsvecBatchUnique (list number of confounders)
-#' List of string vectors. One vector per confounder: vector of unique batches
-#' in this confounder.
-#' \item lsvecidxBatches (idx list length number of confounding variables)
-#' List of index vectors. 
-#' One vector per confounding variable.
-#' Each vector has one entry per sample with the index of the batch ID
-#' within the given confounding variable of the given sample. Reference
-#' is the list of unique batch ids for each confounding variable.
-#' }
-#' }
 #' \item Condition ID (list length number of genes)
 #' List of fits for each gene to the samples of this condition.
 #' One entry of this format for all conditions fit.
@@ -173,11 +162,15 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' }
 #' @slot matCountDataProc (matrix genes x samples) [Default NULL] 
 #' Read count data, unobserved entries are NA. Processed matrix.
-#' @slot dfAnnotationProc (data frame samples x covariates) 
+#' @slot dfDESeqAnnotationProc (data frame samples x covariates) 
 #' {Sample, Condition, Time (numeric), TimeCateg (str)
 #' (and confounding variables if given).}
 #' Annotation table with covariates for each sample.
 #' Processed table.
+#' @slot lsdfCovProc (list of data frames length 3)
+#' One data frame each for "case", "control", and "combined".
+#' Continous covariates are centered and scaled within each group.
+#' Categorical covariates are factored within each group. 
 #' @slot vecDispersions (numeric vector number of samples) 
 #' Gene-wise negative binomial dispersion hyper-parameters.
 #' @slot vecSizeFactors (numeric vector number of samples) 
@@ -189,12 +182,11 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' @slot boolBeta2 (bool)
 #' Whether to model two different slopes for impulse model instead of 
 #' assuming onset slope and offset slope are identical.
-#' @slot vecConfounders (vector of strings number of confounding variables)
-#' Factors to correct for during batch correction. Have to 
-#' supply dispersion factors if more than one is supplied.
+#' @slot vecCovFactor (vector of strings number of categorical covariates)
+#' Categorial covariates to adjust for.
 #' Names refer to columns in dfAnnotation.
-#' @slot vecCovariates (vector of stings number of covaraites)
-#' Covariates to adjust for during differential analysis.
+#' @slot vecCovContinuous (vector of strings number of continuous covariates)
+#' Continuous covariates to adjust for.
 #' Names refer to columns in dfAnnotation.
 #' @slot scaNProc (scalar) Number of processes for 
 #' parallelisation.
@@ -206,15 +198,24 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' @name ImpulseDE2Object-class
 #' 
 #' @author David Sebastian Fischer
-setClass("ImpulseDE2Object", slots = c(
-    dfImpulseDE2Results = "data.frameORNULL", 
-    vecDEGenes = "characterORNULL", lsModelFits = "listORNULL", matCountDataProc = "matrix", 
-    vecAllIDs = "characterORNULL", dfAnnotationProc = "data.frame", vecSizeFactors = "numeric", 
-    vecDispersions = "numeric", boolCaseCtrl = "logical", 
-    boolBeta2 = "logical",
-    vecConfounders = "characterORNULL", 
-    vecCovariates = "characterORNULL", 
-    scaNProc = "numeric", scaQThres = "numericORNULL", strReport = "characterORNULL"))
+setClass("ImpulseDE2Object", 
+    slots = c(
+        dfImpulseDE2Results = "data.frameORNULL", 
+        vecDEGenes = "characterORNULL", 
+        lsModelFits = "listORNULL", 
+        matCountDataProc = "matrix", 
+        vecAllIDs = "characterORNULL", 
+        dfDESeqAnnotationProc = "data.frame", 
+        lsdfCovProc = "listORNULL",
+        vecSizeFactors = "numeric", 
+        vecDispersions = "numeric", 
+        boolCaseCtrl = "logical", 
+        boolBeta2 = "logical",
+        vecCovFactor = "characterORNULL", 
+        vecCovContinuous = "characterORNULL", 
+        scaNProc = "numeric", 
+        scaQThres = "numericORNULL", 
+        strReport = "characterORNULL"))
 
 ### 2. Enable accession of private elements via functions
 
@@ -230,13 +231,14 @@ setClass("ImpulseDE2Object", slots = c(
 #' @rdname get_accessors
 #' @aliases 
 #' get_matCountDataProc 
-#' get_dfAnnotationProc 
+#' get_dfDESeqAnnotationProc 
+#' get_lsdfCovProc
 #' get_vecSizeFactors
 #' get_vecDispersions 
 #' get_boolCaseCtrl
 #' get_boolBeta2
-#' get_vecConfounders 
-#' get_vecCovariates
+#' get_vecCovFactor
+#' get_vecCovContinuous
 #' get_scaNProc
 #' get_scaQThres
 #' get_strReport
@@ -256,20 +258,21 @@ setClass("ImpulseDE2Object", slots = c(
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
-#' vecConfounders  = NULL,
-#' vecCovariates   = NULL,
+#' vecCovFactor    = NULL,
+#' vecCovContinuous= NULL,
 #' scaNProc        = 1 )
 #' # Extract hidden auxillary result and processed input objects.
 #' lsModelFits <- get_lsModelFits(objectImpulseDE2)
 #' matCountDataProc <- get_matCountDataProc(objectImpulseDE2)
-#' dfAnnotationProc <- get_dfAnnotationProc(objectImpulseDE2)
+#' dfDESeqAnnotationProc <- get_dfDESeqAnnotationProc(objectImpulseDE2)
+#' lsdfCovProc <- get_lsdfCovProc(objectImpulseDE2)
 #' vecAllIDs <- get_vecAllIDs(objectImpulseDE2)
 #' vecSizeFactors <- get_vecSizeFactors(objectImpulseDE2)
 #' vecDispersions <- get_vecDispersions(objectImpulseDE2)
 #' boolCaseCtrl <- get_boolCaseCtrl(objectImpulseDE2)
 #' boolBeta2 <- get_boolBeta2(objectImpulseDE2)
-#' vecConfounders <- get_vecConfounders(objectImpulseDE2)
-#' vecCovariates <- get_vecConfounders(objectImpulseDE2)
+#' vecCovFactor <- get_vecCovFactor(objectImpulseDE2)
+#' vecCovContinuous <- get_vecCovContinuous(objectImpulseDE2)
 #' scaNProc <- get_scaNProc(objectImpulseDE2)
 #' scaQThres <- get_scaQThres(objectImpulseDE2)
 #' strReport <- get_strReport(objectImpulseDE2)
@@ -289,8 +292,13 @@ get_matCountDataProc <- function(obj)
 
 #' @rdname get_accessors
 #' @export
-get_dfAnnotationProc <- function(obj) 
-    return(obj@dfAnnotationProc)
+get_dfDESeqAnnotationProc <- function(obj) 
+    return(obj@dfDESeqAnnotationProc)
+
+#' @rdname get_accessors
+#' @export
+get_lsdfCovProc <- function(obj) 
+    return(obj@lsdfCovProc)
 
 #' @rdname get_accessors
 #' @export
@@ -319,13 +327,13 @@ get_boolBeta2 <- function(obj)
 
 #' @rdname get_accessors
 #' @export
-get_vecConfounders <- function(obj) 
-    return(obj@vecConfounders)
+get_vecCovFactor <- function(obj) 
+    return(obj@vecCovFactor)
 
 #' @rdname get_accessors
 #' @export
-get_vecCovariates <- function(obj) 
-    return(obj@vecCovariates)
+get_vecCovContinuous <- function(obj) 
+    return(obj@vecCovContinuous)
 
 #' @rdname get_accessors
 #' @export
@@ -356,13 +364,14 @@ get_strReport <- function(obj)
 #' @aliases 
 #' set_boolCaseCtrl
 #' set_boolBeta2
-#' set_dfAnnotationProc
+#' set_dfDESeqAnnotationProc
+#' set_lsdfCovProc
 #' set_dfImpulseDE2Results
 #' set_lsModelFits
 #' set_matCountDataProc
 #' set_vecAllIDs
-#' set_vecConfounders
-#' set_vecCovariates
+#' set_vecCovFactor
+#' set_vecCovContinuous
 #' set_vecDEGenes
 #' set_vecDispersions
 #' set_vecSizeFactors 
@@ -389,8 +398,14 @@ set_boolBeta2 <- function(obj,element) {
 }
 
 #' @name set_accessors
-set_dfAnnotationProc <- function(obj,element) {
-    obj@dfAnnotationProc <- element
+set_dfDESeqAnnotationProc <- function(obj,element) {
+    obj@dfDESeqAnnotationProc <- element
+    return(obj)
+}
+
+#' @name set_accessors
+set_lsdfCovProc <- function(obj,element) {
+    obj@lsdfCovProc <- element
     return(obj)
 }
 
@@ -437,14 +452,14 @@ set_vecAllIDs <- function(obj,element) {
 }
 
 #' @name set_accessors
-set_vecConfounders <- function(obj,element) {
-    obj@vecConfounders <- element
+set_vecCovFactor <- function(obj,element) {
+    obj@vecCovFactor <- element
     return(obj)
 }
 
 #' @name set_accessors
-set_vecCovariates <- function(obj,element) {
-    obj@vecCovariates <- element
+set_vecCovContinuous <- function(obj,element) {
+    obj@vecCovContinuous <- element
     return(obj)
 }
 
@@ -496,8 +511,8 @@ set_vecSizeFactors <- function(obj,element) {
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
-#' vecConfounders  = NULL,
-#' vecCovariates   = NULL,
+#' vecCovFactor    = NULL,
+#' vecCovContinuous= NULL,
 #' scaNProc        = 1 )
 #' names(objectImpulseDE2) # Display core output
 #' # With respect to this core output, objectImpulseDE2
@@ -585,8 +600,8 @@ append_strReport <- function(obj,s) {
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
-#' vecConfounders  = NULL,
-#' vecCovariates   = NULL,
+#' vecCovFactor    = NULL,
+#' vecCovContinuous= NULL,
 #' scaNProc        = 1 )
 #' # Uncomment to run:
 #' #writeReportToFile(

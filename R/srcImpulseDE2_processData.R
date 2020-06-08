@@ -19,7 +19,7 @@
 #'    \itemize{
 #'      \item checkData() Check format and presence of input data.
 #'      \item nameGenes() Name genes if names are not given.
-#'      \item procAnnotation() Add categorial time variable to 
+#'      \item procDESeqAnnotation() Add categorial time variable to 
 #'      annotation table.
 #'      Add nested batch column if necessary.
 #'      Reduce to samples used.
@@ -32,34 +32,34 @@
 #' @seealso Called by \link{runImpulseDE2}.
 #' 
 #' @param matCountData (matrix genes x samples) [Default NULL] 
-#'    Read count data, unobserved entries are NA.
+#' Read count data, unobserved entries are NA.
 #' @param dfAnnotation (data frame samples x covariates) 
-#'    {Sample, Condition, Time (numeric), TimeCateg (str)
-#'    (and confounding variables if given).}
-#'    Annotation table with covariates for each sample.
+#' {Sample, Condition, Time (numeric), TimeCateg (str)
+#' (and confounding variables if given).}
+#' Annotation table with covariates for each sample.
 #' @param boolCaseCtrl (bool) 
-#' 		Whether to perform case-control analysis. Does case-only
-#' 		analysis if FALSE.
+#' Whether to perform case-control analysis. Does case-only
+#' analysis if FALSE.
 #' @param boolBeta2 (bool)
-#'      Whether to model two different slopes for impulse model instead of 
-#'      assuming onset slope and offset slope are identical.
-#' @param vecConfounders (vector of strings number of confounding variables)
-#' 		Factors to correct for during batch correction. Have to 
-#' 		supply dispersion factors if more than one is supplied.
-#' 		Names refer to columns in dfAnnotation.
-#' @param VecCovariates (vector of strings number of covariates)
-#'      Covariates to adjust for during differential analysis.
-#'      Names refer to columns in dfAnnotation.
+#' Whether to model two different slopes for impulse model instead of 
+#' assuming onset slope and offset slope are identical.
+#' @param vecCovFactor (vector of strings number of categorical covariates)
+#' Categorial covariates to adjust for.
+#' Names refer to columns in dfAnnotation.
+#' @param vecCovContinuous (vector of strings number of continuous covariates)
+#' Continuous covariates to adjust for.
+#' Names refer to columns in dfAnnotation.
+
 #' @param vecDispersionsExternal (vector length number of
-#'    genes in matCountData) [Default NULL]
-#'    Externally generated list of gene-wise dispersion factors
-#'    which overides DESeq2 generated dispersion factors.
+#' genes in matCountData) [Default NULL]
+#' Externally generated list of gene-wise dispersion factors
+#' which overides DESeq2 generated dispersion factors.
 #' @param vecSizeFactorsExternal (vector length number of
-#'    cells in matCountData) [Default NULL]
-#'    Externally generated list of size factors which override
-#'    size factor computation in ImpulseDE2.
+#' cells in matCountData) [Default NULL]
+#' Externally generated list of size factors which override
+#' size factor computation in ImpulseDE2.
 #'    
-#' @return (list length 4)
+#' @return (list length 5)
 #' \itemize{
 #'    \item matCountDataProc (matrix genes x samples)
 #'    Read count data.
@@ -67,6 +67,10 @@
 #'    {Sample, Condition, Time (numeric), TimeCateg (str)
 #'    (and confounding variables if given).}
 #'    Processed annotation table with covariates for each sample.
+#'    \item lsdfCovProc (list of data frames length 3)
+#'    One data frame each for "case", "control", and "combined".
+#'    Continous covariates are centered and scaled within each group.
+#'    Categorical covariates are factored within each group. 
 #'    \item vecSizeFactorsExternalProc (numeric vector number of samples) 
 #'    Model scaling factors for each sample which take
 #'    sequencing depth into account (size factors).
@@ -81,8 +85,8 @@ processData <- function(
     matCountData,
     boolCaseCtrl, 
     boolBeta2,
-    vecConfounders,
-    vecCovariates,
+    vecCovFactor,
+    vecCovContinuous,
     vecDispersionsExternal,
     vecSizeFactorsExternal){
     
@@ -160,14 +164,23 @@ processData <- function(
         }
     }
     
+    # Checks whether a model matrix is full rank
+    checkFullRank <- function(df){
+        matModelMatrix = model.matrix(~., data=df)
+        if(ncol(matModelMatrix) != rankMatrix(matModelMatrix)){
+            stop(paste0("ERROR: Matrix with column names {",
+                colnames(df), "} is not full rank."))
+        }
+    }
+
     # Check format and presence of input data.
     checkData <- function(
         dfAnnotation, 
         matCountData,
         boolCaseCtrl,
         boolBeta2, 
-        vecConfounders,
-        vecCovariates,
+        vecCovFactor,
+        vecCovContinuous,
         vecDispersionsExternal,
         vecSizeFactorsExternal,
         strReportProcessing){
@@ -183,7 +196,7 @@ processData <- function(
         ### 2. Check annotation table content
         ### a) Check column names
         vecColNamesRequired <- c("Sample","Condition","Time",
-                                 vecConfounders, vecCovariates)
+                                 vecCovFactor, vecCovContinuous)
         if( !all(vecColNamesRequired %in% 
                  colnames(dfAnnotation)) ){
             stop(paste0(
@@ -221,64 +234,62 @@ processData <- function(
                     " not occur in annotation table condition column."))
             }
         }
-        ### e) Batch
-        if(!is.null(vecConfounders)){
+        ### e) Categorial covariates
+        if(!is.null(vecCovFactor)){
             # Dummy check: Check that number of batches 
-            # for each confounding variable is > 1
-            for(confounder in vecConfounders){
+            # for each confounding variable is > 1 and < length(vec)
+            for(confounder in vecCovFactor){
                 if(length(unique( dfAnnotation[,confounder] ))==1){
                     stop(paste0(
-                        "ERROR: Model matrix based on confounding ",
-                        "variables {", vecConfounders,
+                        "ERROR: Model matrix based on ",
+                        "categorial covariates {", vecCovFactor,
                         "} is not full rank: Only one batch",
-                        " given for confounder ", confounder, 
-                        ". Remove from vecConfounders or correct",
+                        " given for categorical covariate ", confounder, 
+                        ". Remove from vecCovFactor or correct",
                         " dfAnnotation."))
                 }
+                if(length(unique( dfAnnotation[,confounder] )) == length(dfAnnotation[,confounder])){
+                    stop(paste0(
+                        "ERROR: " confounder " has as many levels as there are samples.",
+                        " If this is supposed to be a continuous covariate,",
+                        " define it in 'vecCovContinuous' instead of 'vecCovFactor'."))
+                }
+
             }
 
         }
-        ### f) Covariates
-        if(!is.null(vecCovariates)){
+        ### f) Continuous covariates
+        if(!is.null(vecCovContinuous)){
             # Dummy check: Check that number of unique values 
             # for each covariate is > 1
-            for(confounder in vecCovariates){
+            # Check numeric
+            for(confounder in vecCovContinuous){
                 if(length(unique( dfAnnotation[,confounder] ))==1){
                     stop(paste0(
-                        "ERROR: Model matrix based on covariates {",
-                        vecCovariates,
+                        "ERROR: Model matrix based on continous covariates {",
+                        vecCovContinuous,
                         "} is not full rank: Only one unique value",
-                        " given for covariate ", confounder, 
-                        ". Remove from vecCovariates or correct",
+                        " given for continuous covariate ", confounder, 
+                        ". Remove from vecCovContinuous or correct",
                         " dfAnnotation."))
+                }
+                if(!is.numeric(dfAnnotation[,confounder])){
+                    stop(paste0(
+                        "ERROR: " confounder " is not numeric.",
+                        " If this is supposed to be a categorial covariate,",
+                        " define it in 'vecCovFactor' instead of 'vecCovContinuous'."))
                 }
             }
         }
         ### g) More detailed full rank check
-        if(!is.null(vecConfounders) | !is.null(vecCovariates)){
-            vecAll = c(vecConfounders, vecCovariates)
-            matModelMatrix <- do.call(cbind, lapply(
-                vecAll,
-                function(confounder){
-                    if(is.numeric(dfAnnotation[,confounder])){
-                      dfAnnotation[,confounder]
-                    } else {
-                      match(dfAnnotation[,confounder],
-                          unique(dfAnnotation[,confounder]))
-                    }
-                }))
-            if(rankMatrix(matModelMatrix)[1] != dim(matModelMatrix)[2]){
-                stop(paste0(
-                    "Model matrix based on variables {", 
-                    vecConfounders, vecCovariates, 
-                    "} is not full rank. ",
-                    "Correct the confounding variables or covariates.",
-                    " Note that it is not possible to model",
-                    " NESTED variables:",
-                    " Any variable cannot",
-                    " be a linear combination of the other",
-                    " variables."))
+        if(!is.null(vecCovContinuous) | !is.null(vecCovFactor)){
+            dfTmp = dfAnnotation[,c(vecCovContinuous, vecCovFactor)]
+            # Already verified that vecCovContinuous is numeric
+            # Coerce vecCovFactor to character
+            for(covFactor in vecCovFactor){
+                dfTmp[,covFactor] = paste0('_', dfTmp[,covFactor])
             }
+            checkFullRank(dfTmp)
         }
         
         ### 3. Check expression table content
@@ -296,12 +307,6 @@ processData <- function(
         checkCounts(matCountData, "matCountData")
         
         ### 4. Check supplied dispersion vector
-        if( is.null(vecDispersionsExternal) & length(vecConfounders)>1 ){
-            stop(paste0(
-                "DESeq2 cannot be run in an automated fashion for multiple ",
-                "confounding variables. Run DESeq separately and supply ",
-                "dispersion parameters through vecDispersionsExternal."))
-        }
         if(!is.null(vecDispersionsExternal)){
             # Check that dispersion parameters were named
             if(is.null(names(vecDispersionsExternal))){
@@ -401,12 +406,12 @@ processData <- function(
                             ]$Sample,collapse=","),collapse="," ) )
             }
         }
-        if(!is.null(vecConfounders)){
-            for(confounder in vecConfounders){
+        if(!is.null(vecCovFactor)){
+            for(confounder in vecCovFactor){
                 for(batch in unique( dfAnnotation[,confounder] )){
                     strReportProcessing <- paste0(
                         strReportProcessing, "\n", 
-                        "Found the following samples for confounder ", 
+                        "Found the following samples for categorial covariate ", 
                         confounder," and batch ", batch, ": ",
                         paste0( dfAnnotation[
                             dfAnnotation[,confounder] %in% batch &
@@ -415,6 +420,12 @@ processData <- function(
                 }
             }
         }
+        if(!is.null(vecCovContinuous)){
+            strReportProcessing <- paste0(
+                strReportProcessing, "\n",
+                "Adjusting for the following continuous covariates: ",
+                "{",vecCovContinuous,"}." 
+        }
         
         return(strReportProcessing)
     }
@@ -422,13 +433,12 @@ processData <- function(
     # Add categorial time variable to annotation table which
     # differentiates case and control time points (given to DESeq2).
     # Add column with time scalars with underscore prefix.
-    # Add nested batch column if necssary for running DESeq2.
-    # Reduce to samples uesed.
-    procAnnotation <- function(dfAnnotation,
+    # Reduce to samples used.
+    procDESeqAnnotation <- function(dfAnnotation,
                                matCountData,
                                boolCaseCtrl,
-                               vecConfounders,
-                               vecCovariates){
+                               vecCovFactor,
+                               vecCovContinuous){
         
         # Make sure all columns are not factors
         for(col in seq(1,dim(dfAnnotation)[2])) dfAnnotation[,col] <- 
@@ -454,32 +464,9 @@ processData <- function(
         
         # Take out columns which are not used
         dfAnnotationProc <- dfAnnotationProc[,c("Sample", "Time", "Condition", 
-                                                vecConfounders, vecCovariates)]
+                                                vecCovFactor, vecCovContinuous)]
         # Add categorial time column for DESeq2
         dfAnnotationProc$TimeCateg <- paste0("_", dfAnnotationProc$Time)
-        # Add nested batches for running DESeq2
-        if(boolCaseCtrl){
-            # Create one new column for each nested batch
-            for(confounder in vecConfounders){
-                vecBatchesCase <- dfAnnotationProc[
-                    dfAnnotationProc$Condition=="case",confounder]
-                vecNestedBatchesCase <- paste0(
-                    "NestedBatch", match(vecBatchesCase, unique(vecBatchesCase)))
-                vecBatchesCtrl <- dfAnnotationProc[
-                    dfAnnotationProc$Condition=="control",confounder]
-                vecNestedBatchesCtrl <- paste0(
-                    "NestedBatch", match(vecBatchesCtrl, unique(vecBatchesCtrl)))
-                vecBatchesNested <- array(NA, dim(dfAnnotationProc)[1])
-                vecBatchesNested[dfAnnotationProc$Condition=="case"] <- 
-                    vecNestedBatchesCase
-                vecBatchesNested[dfAnnotationProc$Condition=="control"] <- 
-                    vecNestedBatchesCtrl
-                strNameConfounderNested <- paste0(confounder, "Nested")
-                dfAnnotationProc[strNameConfounderNested] <- 
-                    vecBatchesNested
-            }
-        }
-        
         return(dfAnnotationProc)
     }
     
@@ -578,22 +565,28 @@ processData <- function(
         matCountData=matCountData,
         boolCaseCtrl=boolCaseCtrl,
         boolBeta2=boolBeta2,
-        vecConfounders=vecConfounders,
-        vecCovariates=vecCovariates,
+        vecCovFactor=vecCovFactor,
+        vecCovContinuous=vecCovContinuous,
         vecDispersionsExternal=vecDispersionsExternal,
         vecSizeFactorsExternal=vecSizeFactorsExternal )
     
     # Process annotation table
-    dfAnnotationProc <- procAnnotation(dfAnnotation=dfAnnotation,
+    dfDESeqAnnotationProc <- procDESeqAnnotation(dfAnnotation=dfAnnotation,
                                        matCountData=matCountData,
                                        boolCaseCtrl=boolCaseCtrl,
-                                       vecConfounders=vecConfounders,
-                                       vecCovariates=vecCovariates)
+                                       vecCovFactor=vecCovFactor,
+                                       vecCovContinuous=vecCovContinuous)
+
+    # Process data frames for model matrices
+    lsdfCovProc <- procCov(dfAnnotation=dfAnnotation,
+        boolCaseCtrl=boolCaseCtrl,
+        vecCovFactor=vecCovFactor,
+        vecCovContinuous=vecCovContinuous)
     
     # Process raw counts
     matCountDataProc <- nameGenes(matCountDataProc=matCountData)
     lsReduceCounts <- reduceCountData(
-        dfAnnotation=dfAnnotationProc, 
+        dfAnnotation=dfDESeqAnnotationProc, 
         matCountDataProc=matCountDataProc)
     matCountDataProc <- lsReduceCounts$matCountDataProc
     strReportProcessing <- paste0(strReportProcessing, "\n",
@@ -611,7 +604,8 @@ processData <- function(
     } else { vecDispersionsExternalProc <-NULL }
     
     return( list(matCountDataProc           = matCountDataProc,
-                 dfAnnotationProc           = dfAnnotationProc,
+                 dfDESeqAnnotationProc      = dfDESeqAnnotationProc,
+                 lsdfCovProc                = lsdfCovProc,
                  vecSizeFactorsExternalProc = vecSizeFactorsExternalProc,
                  vecDispersionsExternalProc = vecDispersionsExternalProc,
                  strReportProcessing        = strReportProcessing ) )

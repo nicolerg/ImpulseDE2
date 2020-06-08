@@ -17,13 +17,11 @@
 #' @param boolCaseCtrl (bool) 
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
-#' @param vecConfounders (vector of strings number of 
-#' confounding variables)
-#' Factors to correct for during batch correction. Have to 
-#' supply dispersion factors if more than one is supplied.
-#' Names refer to columns in dfAnnotationProc.
-#' @param vecCovariates (vector of strings number of covariates)
-#' Covariates to adjust for during differential analysis.
+#' @param vecCovFactor (vector of strings number of categorical covariates)
+#' Categorial covariates to adjust for.
+#' Names refer to columns in dfAnnotation.
+#' @param vecCovContinuous (vector of strings number of continuous covariates)
+#' Continuous covariates to adjust for.
 #' Names refer to columns in dfAnnotation. 
 #'		
 #' @return (numeric vector length number of genes)
@@ -39,8 +37,10 @@ runDESeq2 <- function(
     dfAnnotationProc, 
     matCountDataProc,
     boolCaseCtrl,
-    vecConfounders,
-    vecCovariates){
+    vecCovFactor,
+    vecCovContinuous){
+
+    vecCovAll = c(vecCovContinuous, vecCovFactor)
     
     # Get gene-wise dispersion estimates
     # var = mean + alpha * mean^2, alpha is dispersion
@@ -50,8 +50,8 @@ runDESeq2 <- function(
     dds <- NULL
     if(!boolCaseCtrl){
         # Case-only
-        if(is.null(vecConfounders) & is.null(vecCovariates)){
-            # No batch correction or adjustment
+        if(is.null(vecCovAll)){
+            # No adjustment
             dds <- suppressWarnings( DESeqDataSetFromMatrix(
                 countData = matCountDataProc,
                 colData = dfAnnotationProc,
@@ -60,8 +60,8 @@ runDESeq2 <- function(
             dds <- estimateDispersions(dds)
             
         } else {
-            # Batch or covariate correction or both 
-            cont = paste0(c("~ TimeCateg", vecConfounders, vecCovariates), 
+            # Adjustment 
+            cont = paste0(c("~ TimeCateg", vecCovAll), 
                 collapse = " + ")
             tryCatch({
                 print(cont)
@@ -73,7 +73,7 @@ runDESeq2 <- function(
                 dds <- estimateDispersions(dds)
             }, error=function(strErrorMsg){
                 print(strErrorMsg)
-                contred = paste0("~ ", paste0(c(vecConfounders, vecCovariates), collapse = " + "))
+                contred = paste0("~ ", paste0(vecCovAll, collapse = " + "))
                 print(paste0(
                     "WARNING: DESeq2 failed on full model ",
                     "- dispersions may be inaccurate.",
@@ -87,7 +87,7 @@ runDESeq2 <- function(
                         " estimation, read stdout.")
             }, finally={
                 if(is.null(dds)){
-                    contred = paste0("~ ", paste0(c(vecConfounders, vecCovariates), collapse = " + "))
+                    contred = paste0("~ ", paste0(vecCovAll, collapse = " + "))
                     dds <- suppressWarnings( DESeqDataSetFromMatrix(
                         countData = matCountDataProc,
                         colData = dfAnnotationProc,
@@ -99,7 +99,7 @@ runDESeq2 <- function(
         } 
     } else {
         # Case-control
-        if(is.null(vecConfounders) & is.null(vecCovariates)){
+        if(is.null(vecCovAll)){
             # No correction
             # Catch non full-rank design matrix 
             # e.g. conditions have mutually 
@@ -150,8 +150,18 @@ runDESeq2 <- function(
             # Therefore, error catching tailored to a) and b).
             #
             # Capture all nested batch variables 
+
+            ##############################################################################
+            ##
+            ## @dnachun the "nested" batches seem suspect to me 
+            ## Do they need to be nested since cases and controls are modeled separately?
+            ## Otherwise, why can't "Batch" be a covariate without an interaction term?
+            ## Alternatively, could size factors and dispersions be calculated for cases
+            ## and controls separately?
+            ##
+            ##############################################################################
             varBatch = colnames(dfAnnotationProc)[grepl('Nested$',colnames(dfAnnotationProc))]
-            cont = paste0(c("~ Condition + Condition:TimeCateg", paste0(varBatch, ':Condition'), vecCovariates), collapse = " + ")
+            cont = paste0(c("~ Condition + Condition:TimeCateg", paste0(c(vecCovContinuous, varBatch), ':Condition')), collapse = " + ")
             tryCatch({
                 dds <- suppressWarnings( DESeqDataSetFromMatrix(
                     countData = matCountDataProc,
@@ -172,6 +182,17 @@ runDESeq2 <- function(
                         " Read stdout.")
             }, finally={
                 if(is.null(dds)){
+                    contred = paste0(c("~ TimeCateg", vecCovAll), collapse = " + ")
+                    matModelMatrix = model.matrix(eval(parse(text=contred)), data=dfAnnotationProc)
+                    boolFullRankBatchTime = ncol(matModelMatrix) != rankMatrix(matModelMatrix)
+                    if(){
+
+                    }
+                    ##############################################################################
+                    ##
+                    ## @dnachun why convert batch to numeric here?
+                    ##
+                    ##############################################################################
                     matModelMatrixBatches <- do.call(cbind, lapply(
                         vecConfounders, function(confounder){
                             match(dfAnnotationProc[,confounder], 
@@ -185,9 +206,9 @@ runDESeq2 <- function(
                         matModelMatrixBatchesTime)[1] == 
                         dim(matModelMatrixBatchesTime)[2]
                     if(!boolFullRankBatchTime){
-                        contred = paste0(c("~ Condition + Condition:TimeCateg", vecCovariates), collapse = " + ")
+                        contred = paste0(c("~ Condition + Condition:TimeCateg", vecCovAll), collapse = " + ")
                         paste0("Model matrix based on covariates {",
-                               vecConfounders, vecCovariates, 
+                               vecCovAll, 
                                "} and time is not full rank: ",
                                "There are covariates with ",
                                " batch structures which are linear",
@@ -202,10 +223,10 @@ runDESeq2 <- function(
                         dds <- estimateSizeFactors(dds)
                         dds <- estimateDispersions(dds)
                     } else {
-                        contred = paste0(c("~ Condition", paste0(varBatch, ':Condition'), vecCovariates), collapse = " + ")
+                        contred = paste0(c("~ Condition", paste0(c(vecCovContinuous, varBatch), ':Condition')), collapse = " + ")
                         paste0("Found 1. or {1. and 2.}:")
                         paste0("1. Model matrix based on covariates {",
-                               vecConfounders, vecCovariates, 
+                               vecCovAll,
                                "} and time is not full rank:",
                                " There are covariates with ",
                                " batch structures which are ",
