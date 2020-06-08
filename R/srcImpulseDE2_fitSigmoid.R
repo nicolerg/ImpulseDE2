@@ -230,7 +230,7 @@ fitSigmoidModel <- function(
         matBatchFactors <- model.matrix(~ ., lsvecidxBatch)[,-1]
 
         vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
-        lsvecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+        lsvecBatchFactors <- exp(vecThetaCovar)
         lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
         lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
         names(lsvecBatchFactors) <- colnames(matBatchFactors)
