@@ -96,14 +96,14 @@ processData <- function(
     # Check whether object was supplied (is not NULL).
     checkNull <- function(objectInput,strObjectInput){
         if(is.null(objectInput)){
-            stop(paste0( "ERROR: ", strObjectInput,
+            stop(paste0(strObjectInput,
                          " was not given as input." ))
         }
     }
     # Check whether object does not have NA elements.
     checkNA <- function(objectInput,strObjectInput){
         if(is.na(objectInput)){
-            stop(paste0( "ERROR: ", strObjectInput,
+            stop(paste0(strObjectInput,
                          " is NA and needs to be specifief." ))
         }
     }
@@ -111,7 +111,7 @@ processData <- function(
     checkDimMatch <-function(
         matInput1, matInput2, strMatInput1, strMatInput2){
         if(any(dim(matInput1)!=dim(matInput2))){
-            stop(paste0( "ERROR: ", strMatInput1, 
+            stop(paste0(strMatInput1, 
                          " does not have the dimensions as ", 
                          strMatInput2 , "." ))
         }
@@ -119,14 +119,14 @@ processData <- function(
     # Checks whether vectors are identical.
     checkElementMatch <- function(vec1, vec2, strVec1, strVec2){
         if(!any(vec1==vec2)){
-            stop(paste0( "ERROR: ",strVec1 ," do not agree with ", 
+            stop(paste0(strVec1 ," do not agree with ", 
                          strVec2, "." ))
         }
     }
     # Checks whether elements are numeric
     checkNumeric <- function(matInput, strMatInput){
         if(any(!is.numeric(matInput))){
-            stop(paste0( "ERROR: ", strMatInput, 
+            stop(paste0(strMatInput, 
                          " contains non-numeric elements. ",
                          "Requires numeric data." ))
         }
@@ -135,7 +135,7 @@ processData <- function(
     checkProbability <- function(matInput, strMatInput){
         checkNumeric(matInput, strMatInput)
         if(any(matInput < 0 | matInput > 1 | is.na(matInput))){
-            stop(paste0( "ERROR: ", strMatInput, 
+            stop(paste0(strMatInput, 
                          " contains elements outside",
                          " of interval [0,1]." ))
         }
@@ -148,17 +148,17 @@ processData <- function(
     checkCounts <- function(matInput, strMatInput){
         checkNumeric(matInput, strMatInput)
         if(any(matInput[!is.na(matInput)] %% 1 != 0)){
-            stop(paste0( "ERROR: ", strMatInput, 
+            stop(paste0(strMatInput, 
                          " contains non-integer elements.",
                          " Requires count data." ))
         }
         if(any(!is.finite(matInput[!is.na(matInput)]))){
-            stop(paste0( "ERROR: ", strMatInput, 
+            stop(paste0(strMatInput, 
                          " contains infinite elements.",
                          " Requires count data." ))
         }
         if(any(matInput[!is.na(matInput)]<0)){
-            stop(paste0( "ERROR: ", strMatInput, 
+            stop(paste0(strMatInput, 
                          " contains negative elements.",
                          " Requires count data." ))
         }
@@ -168,8 +168,9 @@ processData <- function(
     checkFullRank <- function(df){
         matModelMatrix = model.matrix(~., data=df)
         if(ncol(matModelMatrix) != rankMatrix(matModelMatrix)){
-            stop(paste0("ERROR: Matrix with column names {",
-                colnames(df), "} is not full rank."))
+            stop(paste0("Matrix with column names {",
+                paste0(colnames(df),collapse=','), "} is not full rank.",
+                " Check for confounding among these variables."))
         }
     }
 
@@ -209,7 +210,7 @@ processData <- function(
         # Check that sample name do not occur twice
         if(any(duplicated(dfAnnotation$Sample))){
             stop(paste0(
-                "ERROR: [Annotation table] ",
+                "[Annotation table] ",
                 "Sample names must be unique: Sample(s) ",
                 paste0((dfAnnotation$Sample)[
                     duplicated(dfAnnotation$Sample)],collapse=","),
@@ -224,13 +225,13 @@ processData <- function(
         # Check that given conditions exisit in annotation table
         if(!("case" %in% lsConditions)){
             stop(paste0(
-                "ERROR: Condition \"case\" does",
+                "Condition \"case\" does",
                 " not occur in annotation table condition column."))
         }
         if(boolCaseCtrl){
             if(!("control" %in% lsConditions)){
                 stop(paste0(
-                    "ERROR: Condition \"control\" does",
+                    "Condition \"control\" does",
                     " not occur in annotation table condition column."))
             }
         }
@@ -241,16 +242,16 @@ processData <- function(
             for(confounder in vecCovFactor){
                 if(length(unique( dfAnnotation[,confounder] ))==1){
                     stop(paste0(
-                        "ERROR: Model matrix based on ",
+                        "Model matrix based on ",
                         "categorial covariates {", vecCovFactor,
-                        "} is not full rank: Only one batch",
+                        "} is not full rank: Only one level",
                         " given for categorical covariate ", confounder, 
                         ". Remove from vecCovFactor or correct",
                         " dfAnnotation."))
                 }
                 if(length(unique( dfAnnotation[,confounder] )) == length(dfAnnotation[,confounder])){
                     stop(paste0(
-                        "ERROR: " confounder " has as many levels as there are samples.",
+                        "vecCovFactor ", confounder, " has as many levels as there are samples.",
                         " If this is supposed to be a continuous covariate,",
                         " define it in 'vecCovContinuous' instead of 'vecCovFactor'."))
                 }
@@ -266,8 +267,8 @@ processData <- function(
             for(confounder in vecCovContinuous){
                 if(length(unique( dfAnnotation[,confounder] ))==1){
                     stop(paste0(
-                        "ERROR: Model matrix based on continous covariates {",
-                        vecCovContinuous,
+                        "Model matrix based on continous covariates {",
+                        paste0(vecCovContinuous, collapse=','),
                         "} is not full rank: Only one unique value",
                         " given for continuous covariate ", confounder, 
                         ". Remove from vecCovContinuous or correct",
@@ -275,7 +276,7 @@ processData <- function(
                 }
                 if(!is.numeric(dfAnnotation[,confounder])){
                     stop(paste0(
-                        "ERROR: " confounder " is not numeric.",
+                        "vecCovContinuous ", confounder, " is not numeric.",
                         " If this is supposed to be a categorial covariate,",
                         " define it in 'vecCovFactor' instead of 'vecCovContinuous'."))
                 }
@@ -295,13 +296,12 @@ processData <- function(
         ### 3. Check expression table content
         # Check that all entries in count data table occur in annotation table
         if( any(!(colnames(matCountData) %in% dfAnnotation$Sample)) ){
-            strReportProcessing <- paste0(
-                strReportProcessing, "\n","WARNING: The column(s) ",
+            warning(paste0("The column(s) ",
                 paste0(as.character( colnames(matCountData)[
                     !(colnames(matCountData) %in% dfAnnotation$Sample)] ),
                     collapse=","),
                 " in the count data table do(es) not occur",
-                " in annotation table and will be ignored.")
+                " in annotation table and will be ignored.\n"))
         }
         checkNull(rownames(matCountData),"[Rownames of matCountData]")
         checkCounts(matCountData, "matCountData")
@@ -311,7 +311,7 @@ processData <- function(
             # Check that dispersion parameters were named
             if(is.null(names(vecDispersionsExternal))){
                 stop(paste0(
-                    "ERROR: vecDispersionsExternal was not named.",
+                    "vecDispersionsExternal was not named.",
                     " Name according to rownames of matCountData."))
             }
             # Check that one dispersion parameter factors was supplied per gene
@@ -320,7 +320,7 @@ processData <- function(
                any( !(rownames(matCountData) %in% 
                       names(vecDispersionsExternal)) ) ) {
                 stop(paste0(
-                    "ERROR: vecDispersionsExternal supplied but names",
+                    "vecDispersionsExternal supplied but names",
                     " do not agree with rownames of matCountData."))
             }
             # Check that dipsersion parameter vector is numeric
@@ -328,7 +328,7 @@ processData <- function(
             # Check that dispersion parameters are positive
             if(any(vecDispersionsExternal <= 0)){
                 stop(paste0(
-                    "WARNING: vecDispersionsExternal contains negative",
+                    "vecDispersionsExternal contains negative",
                     " or zero elements which leads.",
                     "Dispersion parameters must be positive." ))
             }
@@ -338,7 +338,7 @@ processData <- function(
         if(!is.null(vecSizeFactorsExternal)){
             # Check that size factors were named
             if(is.null(names(vecSizeFactorsExternal))){
-                stop(paste0("ERROR: vecSizeFactorsExternal was not named.",
+                stop(paste0("vecSizeFactorsExternal was not named.",
                             " Name according to colnames of matCountData."))
             }
             # Check that one size factors was supplied per cell
@@ -347,7 +347,7 @@ processData <- function(
                any( !(colnames(matCountData) %in% 
                       names(vecSizeFactorsExternal)) ) ){
                 stop(paste0(
-                    "ERROR: vecSizeFactorsExternal supplied but",
+                    "vecSizeFactorsExternal supplied but",
                     " names do not agree with colnames of matCountData."))
             }
             # Check that size factors vector is numeric
@@ -355,7 +355,7 @@ processData <- function(
             # Check that size factors are positive
             if(any(vecSizeFactorsExternal <= 0)){
                 stop(paste0(
-                    "WARNING: vecSizeFactorsExternal contains negative ",
+                    "vecSizeFactorsExternal contains negative ",
                     "or zero elements which leads.",
                     "Size factors must be positive, remove samples if size ",
                     "factor is supposed to be zero." ))
@@ -412,7 +412,7 @@ processData <- function(
                     strReportProcessing <- paste0(
                         strReportProcessing, "\n", 
                         "Found the following samples for categorial covariate ", 
-                        confounder," and batch ", batch, ": ",
+                        confounder," and level ", batch, ": ",
                         paste0( dfAnnotation[
                             dfAnnotation[,confounder] %in% batch &
                                 dfAnnotation$Sample %in% colnames(matCountData),
@@ -424,7 +424,7 @@ processData <- function(
             strReportProcessing <- paste0(
                 strReportProcessing, "\n",
                 "Adjusting for the following continuous covariates: ",
-                "{",vecCovContinuous,"}." 
+                "{",vecCovContinuous,"}.")
         }
         
         return(strReportProcessing)
@@ -439,10 +439,18 @@ processData <- function(
                                boolCaseCtrl,
                                vecCovFactor,
                                vecCovContinuous){
+
+        # Make sure factors are characters
+        for(cov in c(vecCovFactor, "Condition", "Sample")){
+            if(is.numeric(dfAnnotation[,cov])){
+                dfAnnotation[,cov] = paste0('_', dfAnnotation[,cov])
+            }
+        }
         
-        # Make sure all columns are not factors
-        for(col in seq(1,dim(dfAnnotation)[2])) dfAnnotation[,col] <- 
-                as.vector(dfAnnotation[,col])
+        # Make sure vecCovContinuous are numeric 
+        for(cov in c(vecCovContinuous, "Time")){
+            dfAnnotation[,cov] = as.numeric(dfAnnotation[,cov])
+        }
         
         if(!boolCaseCtrl){
             dfAnnotationProc <- 
@@ -468,6 +476,90 @@ processData <- function(
         # Add categorial time column for DESeq2
         dfAnnotationProc$TimeCateg <- paste0("_", dfAnnotationProc$Time)
         return(dfAnnotationProc)
+    }
+
+    # Split samples into case, control, and combined
+    # For each group of samples, center and scale continous covariates;
+    # Convert categorical covariates to strings 
+    # Return a list of data frames, one data frame per group of samples 
+    procCov <- function(dfAnnotation, boolCaseCtrl, vecCovFactor, vecCovContinuous){
+        if(is.null(c(vecCovFactor, vecCovContinuous))){
+            return(NULL)
+        }
+        # Get cases, which applies whether or not there are controls 
+        dfCase = dfAnnotation[dfAnnotation$Condition == "case", c(vecCovFactor, vecCovContinuous, "Sample")]
+        if(boolCaseCtrl){
+            dfControl = dfAnnotation[dfAnnotation$Condition == "control", c(vecCovFactor, vecCovContinuous, "Sample")]
+            dfCombined = dfAnnotation[dfAnnotation$Condition == "control|case", c(vecCovFactor, vecCovContinuous, "Sample")]
+        }else{
+            dfControl = NULL
+            dfCombined = NULL
+        }
+        lsdfCov = list(case = dfCase,
+            control = dfControl,
+            combined = dfCombined)
+        # Handle covariates separately in each group of samples
+        lsdfCovProc = lapply(lsdfCov, function(df){
+            if(is.null(df)){
+                return(NULL)
+            }
+            # Center and scale continuous covariates
+            for(cov in vecCovContinuous){
+                df[,cov] = scale(df[,cov], center=T, scale=T)
+            }
+            # Convert categorical covariates to string
+            for(cov in vecCovFactor){
+                if(!is.character(df[,cov])){
+                    df[,cov] = paste0('_', df[,cov])
+                }
+            }
+            rownames(df) = df$Sample
+            df$Sample = NULL
+            return(df)
+            })
+        return(lsdfCovProc)
+    }
+
+    # Calculate variance inflation factor for all covariates, including Time and Condition (when applicable)
+    checkConfounding <- function(dfDESeqAnnotationProc, boolCaseCtrl, 
+        vecCovFactor, vecCovContinuous, lsdfCovProc){
+            
+        if(boolCaseCtrl){
+            # check the "combined" data frame 
+            df = lsdfCovProc[["combined"]]
+            # get condition
+            df$Condition = dfDESeqAnnotationProc$Condition[match(dfDESeqAnnotationProc$Sample, rownames(df))]
+            # format contrast
+            contrast = paste0('tmp ~ ', paste0(c(vecCovFactor, vecCovContinuous, 'Condition', 'Time'), collapse = " + "))
+        }else{
+            # check the "case" data frame 
+            df = lsdfCovProc[["case"]]
+            # format contrast
+            contrast = paste0('tmp ~ ', paste0(c(vecCovFactor, vecCovContinuous, 'Time'), collapse = " + "))
+        }
+
+        # get timepoints 
+        df$Time = dfDESeqAnnotationProc$Time[match(dfDESeqAnnotationProc$Sample, rownames(df))]
+        # get random outcome
+        df$tmp = seq(1:nrow(df))
+
+        # linear regression 
+        model = lm(eval(parse(text=contrast)), data=df)
+        vif = as.data.frame(ols_vif_tol(model))
+
+        if(any(vif$VIF > 10)){
+            collinear_cov = vif[vif$VIF > 10, "Variables"]
+            warning(paste0("A variance inflation factor > 10 has been identified ",
+                "for the following covariates, which indicates serious collinearity needing correction: {", 
+                paste(collinear_cov, collapse=','), "}. We strongly recommend considering the correlation structure ",
+                "between covariates before proceeding.\n"))
+        }else if(any(vif$VIF > 4)){
+            collinear_cov = vif[vif$VIF > 4, "Variables"]
+            warning(paste0("A variance inflation factor > 4 has been identified ",
+                "for the following covariates, which warrants further investigation: {", 
+                paste(collinear_cov, collapse=','), "}.\n"))
+        }
+
     }
     
     # Name genes if names are not given.
@@ -511,24 +603,22 @@ processData <- function(
         vecboolNASample <- apply(matCountDataProc,2,function(sample)
             all(is.na(sample)) )
         if(any(vecboolNASample)){
-            strReportCountRed <- paste0(
-                strReportCountRed,  "\n","WARNING: Sample(s) ",
+            warning(paste0("Sample(s) ",
                 paste0(colnames(matCountDataProc)[vecboolNASample], 
                        collapse=","),
                 " only contain(s) NA values and will be ",
-                "removed from the analysis.")
+                "removed from the analysis.\n"))
             matCountDataProc <- matCountDataProc[,!vecboolNASample]
         }
         # Trigger warning if all zero sample is encountered - these are kept!
         vecboolAllZeroSample <- apply(matCountDataProc,2,function(sample) 
             all(sample[!is.na(sample)]==0) )
         if(any(vecboolAllZeroSample)){
-            strReportCountRed <- paste0(
-                strReportCountRed,  "\n", "WARNING: Sample(s) ",
+            warning(paste0("Sample(s) ",
                 paste0(colnames(matCountDataProc)[vecboolAllZeroSample], 
                        collapse=","),
                 " only contain(s) zeros (and NAs).",
-                " These samples are kept for analysis.")
+                " These samples are kept for analysis.\n"))
         }
         
         ### 2. Rows (Genes):
@@ -537,12 +627,10 @@ processData <- function(
             any(!is.na(gene) & gene > 0) )
         matCountDataProc <- matCountDataProc[vecboolNonZeroGene,]
         if(sum(!vecboolNonZeroGene) > 0){
-            strReportCountRed <- paste0(
-                strReportCountRed,  "\n","WARNING: ",
-                sum(!vecboolNonZeroGene), " out of ",
+            warning(paste0(sum(!vecboolNonZeroGene), " out of ",
                 length(vecboolNonZeroGene),
                 " genes do not have obserserved non-zero counts",
-                " and are excluded.")
+                " and are excluded.\n"))
         }
         
         # Sort count matrix column by annotation table
@@ -569,7 +657,7 @@ processData <- function(
         vecCovContinuous=vecCovContinuous,
         vecDispersionsExternal=vecDispersionsExternal,
         vecSizeFactorsExternal=vecSizeFactorsExternal )
-    
+
     # Process annotation table
     dfDESeqAnnotationProc <- procDESeqAnnotation(dfAnnotation=dfAnnotation,
                                        matCountData=matCountData,
@@ -582,6 +670,14 @@ processData <- function(
         boolCaseCtrl=boolCaseCtrl,
         vecCovFactor=vecCovFactor,
         vecCovContinuous=vecCovContinuous)
+
+    # Check for confounding and collinearity 
+    checkConfounding(
+        dfDESeqAnnotationProc=dfDESeqAnnotationProc,
+        boolCaseCtrl=boolCaseCtrl,
+        vecCovFactor=vecCovFactor,
+        vecCovContinuous=vecCovContinuous,
+        lsdfCovProc=lsdfCovProc)
     
     # Process raw counts
     matCountDataProc <- nameGenes(matCountDataProc=matCountData)

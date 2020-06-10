@@ -40,6 +40,12 @@ runDESeq2 <- function(
     vecCovFactor,
     vecCovContinuous){
 
+    # Checks whether a model matrix from a data.frame is full rank
+    isFullRank <- function(df){
+        matModelMatrix = model.matrix(~., data=df)
+        return(ncol(matModelMatrix) == rankMatrix(matModelMatrix))
+    }
+
     vecCovAll = c(vecCovContinuous, vecCovFactor)
     
     # Get gene-wise dispersion estimates
@@ -138,30 +144,8 @@ runDESeq2 <- function(
         } else {
             # With correction 
             # Catch non full-rank design matrix 
-            # e.g.  a) batches of one confounder have mutually 
-            # exclusive sets of time points or
-            # b) conditions have mutually exclusive sets of time points.
-            # Note that full rank of design matrix of batches is 
-            # checked in data processing.
-            # Note that design matrix of batches and condition is full 
-            # rank if batch
-            # matrix is full rank due to the nested batches trick 
-            # (using Condition:Batch below).
-            # Therefore, error catching tailored to a) and b).
-            #
-            # Capture all nested batch variables 
-
-            ##############################################################################
-            ##
-            ## @dnachun the "nested" batches seem suspect to me 
-            ## Do they need to be nested since cases and controls are modeled separately?
-            ## Otherwise, why can't "Batch" be a covariate without an interaction term?
-            ## Alternatively, could size factors and dispersions be calculated for cases
-            ## and controls separately?
-            ##
-            ##############################################################################
-            varBatch = colnames(dfAnnotationProc)[grepl('Nested$',colnames(dfAnnotationProc))]
-            cont = paste0(c("~ Condition + Condition:TimeCateg", paste0(c(vecCovContinuous, varBatch), ':Condition')), collapse = " + ")
+            # This is also checked for during the preprocessing step 
+            cont = paste0(c("~ Condition + Condition:TimeCateg", vecCovAll), collapse = " + ")
             tryCatch({
                 dds <- suppressWarnings( DESeqDataSetFromMatrix(
                     countData = matCountDataProc,
@@ -182,68 +166,82 @@ runDESeq2 <- function(
                         " Read stdout.")
             }, finally={
                 if(is.null(dds)){
-                    contred = paste0(c("~ TimeCateg", vecCovAll), collapse = " + ")
-                    matModelMatrix = model.matrix(eval(parse(text=contred)), data=dfAnnotationProc)
-                    boolFullRankBatchTime = ncol(matModelMatrix) != rankMatrix(matModelMatrix)
-                    if(){
-
-                    }
-                    ##############################################################################
-                    ##
-                    ## @dnachun why convert batch to numeric here?
-                    ##
-                    ##############################################################################
-                    matModelMatrixBatches <- do.call(cbind, lapply(
-                        vecConfounders, function(confounder){
-                            match(dfAnnotationProc[,confounder], 
-                                  unique(dfAnnotationProc[,confounder]))
-                        }))
-                    matModelMatrixBatchesTime <- cbind(
-                        matModelMatrixBatches,
-                        match(dfAnnotationProc$Time, 
-                              unique(dfAnnotationProc$Time)))
-                    boolFullRankBatchTime <- rankMatrix(
-                        matModelMatrixBatchesTime)[1] == 
-                        dim(matModelMatrixBatchesTime)[2]
-                    if(!boolFullRankBatchTime){
-                        contred = paste0(c("~ Condition + Condition:TimeCateg", vecCovAll), collapse = " + ")
-                        paste0("Model matrix based on covariates {",
-                               vecCovAll, 
-                               "} and time is not full rank: ",
-                               "There are covariates with ",
-                               " batch structures which are linear",
-                               " combinations of the time points.")
-                        paste0("Using reduced model formulation ",
+                    # One of three cases:
+                    # 1. Covariates are linear combinations of time points (covariates + time is not full rank)
+                    # 2. Conditions (case and control) have mutually exclusive sets of time points (condition + time is not full rank)
+                    # 3. Covariates are linear combinations of other covariates (covariates alone are not full rank)
+                    # 4. Covariates are linear combinations of conditions (covariates + condition is not full rank)
+                    if(!isFullRank(dfAnnotationProc[,c("TimeCateg", vecCovAll)])){
+                        # Case 1
+                        contred = paste0(c("~ Condition", vecCovAll), collapse = " + ")
+                        print(paste0("Model matrix based on covariates {",
+                               paste(vecCovAll, collapse=','), 
+                               "} and Time is not full rank: ",
+                               "There are covariates which are linear",
+                               " combinations of the time points."))
+                        print(paste0("Using reduced model formulation ",
                                "[full= ", contred, ", ",
-                               "reduced= ~TimeCateg].")
+                               "reduced= ~1]."))
                         dds <- suppressWarnings( DESeqDataSetFromMatrix(
                             countData = matCountDataProc,
                             colData = dfAnnotationProc,
                             design = eval(parse(text=contred)) ) )
                         dds <- estimateSizeFactors(dds)
                         dds <- estimateDispersions(dds)
-                    } else {
-                        contred = paste0(c("~ Condition", paste0(c(vecCovContinuous, varBatch), ':Condition')), collapse = " + ")
-                        paste0("Found 1. or {1. and 2.}:")
-                        paste0("1. Model matrix based on covariates {",
-                               vecCovAll,
-                               "} and time is not full rank:",
-                               " There are covariates with ",
-                               " batch structures which are ",
-                               "linear combinations of the time points.")
-                        paste0(" 2. Model matrix based on condition",
-                               " and time is not full rank: ",
+                    }else if(!isFullRank(dfAnnotationProc[,c("Condition", "TimeCateg")])){
+                        # Case 2
+                        contred = paste0(c("~ Condition", vecCovAll), collapse = " + ")
+                        print(paste0("Model matrix based on Condition",
+                               " and Time is not full rank: ",
                                "Conditions case and control have",
-                               " mutually exclusive sets of timepoints.")
-                        paste0("Using reduced model formulation ",
-                               "[full= ",contred, ", ",
-                               "reduced= ~1].")
+                               " mutually exclusive sets of timepoints."))
+                        print(paste0("Using reduced model formulation ",
+                               "[full= ", contred, ", ",
+                               "reduced= ~1]."))
                         dds <- suppressWarnings( DESeqDataSetFromMatrix(
                             countData = matCountDataProc,
                             colData = dfAnnotationProc,
                             design = eval(parse(text=contred)) ) )
                         dds <- estimateSizeFactors(dds)
                         dds <- estimateDispersions(dds)
+                    }else if(!isFullRank(dfAnnotationProc[,vecCovAll])){
+                        # Case 3
+                        contred = "~ Condition + Condition:TimeCateg"
+                        print(paste0("Model matrix based on",
+                               " covariates {",paste(vecCovAll, collapse=','), "} is not full rank: ",
+                               "Some covariates are linear combinations of each other."))
+                        print(paste0("Using reduced model formulation ",
+                               "[full= ", contred, ", ",
+                               "reduced= ~1]."))
+                        dds <- suppressWarnings( DESeqDataSetFromMatrix(
+                            countData = matCountDataProc,
+                            colData = dfAnnotationProc,
+                            design = eval(parse(text=contred)) ) )
+                        dds <- estimateSizeFactors(dds)
+                        dds <- estimateDispersions(dds)
+                    }else if(!isFullRank(dfAnnotationProc[,c("Condition", vecCovAll)])){
+                        # Case 4
+                        contred = paste0(c("~ TimeCateg", vecCovAll), collapse = " + ")
+                        print(paste0("Model matrix based on covariates {",
+                               paste(vecCovAll, collapse=','), 
+                               "} and Condition is not full rank: ",
+                               "There are covariates which are linear",
+                               " combinations of Condition (case/control)."))
+                        print(paste0("Using reduced model formulation ",
+                               "[full= ", contred, ", ",
+                               "reduced= ~1]."))
+                        dds <- suppressWarnings( DESeqDataSetFromMatrix(
+                            countData = matCountDataProc,
+                            colData = dfAnnotationProc,
+                            design = eval(parse(text=contred)) ) )
+                        dds <- estimateSizeFactors(dds)
+                        dds <- estimateDispersions(dds)
+                    }else{
+                        stop(paste("Congratulations, I don't know how you got here.", 
+                            "Please check previous warning and error messages.",
+                            "There is unexpected confounding between your covariates {",
+                            paste(vecCovAll, collapse=','),"}, Time,",
+                            "and Condition that we did not account for."))
                     }
                 }
             })

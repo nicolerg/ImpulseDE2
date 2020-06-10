@@ -13,6 +13,7 @@
 #' @importFrom stats dnbinom median optim p.adjust pchisq rnbinom rnorm runif sd time
 #' @import SummarizedExperiment
 #' @importFrom utils packageDescription
+#' @importFrom olsrr ols_vif_tol
 NULL
 
 ### Main function / Wrapper function
@@ -309,8 +310,6 @@ runImpulseDE2 <- function(
         tm_fitImpulse <- system.time({
             objectImpulseDE2 <- fitModels(
                 objectImpulseDE2 = objectImpulseDE2, 
-                vecCovFactor = vecCovFactor,
-                vecCovContinuous = vecCovContinuous, 
                 boolCaseCtrl = boolCaseCtrl,
                 boolBeta2 = boolBeta2,
                 MAXIT = MAXIT)

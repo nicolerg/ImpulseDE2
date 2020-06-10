@@ -42,10 +42,11 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
     scaMeanCount <- mean(vecCounts, na.rm = TRUE)
     # Expression means by timepoint
     vecCountsSFcorrected <- vecCounts/vecSizeFactors
-    vecCountsSFcorrectedNorm <- vecCountsSFcorrected / scaMeanCount
-    if (!is.null(lsdfCovProc)) {
+    vecCountsSFcorrectedNorm <- vecCountsSFcorrected/scaMeanCount
+
+    if (!is.null(dfCovProc)) {
         # Estimate batch factors
-        vecBatchFactors <- array(1, length(vecCounts))
+        vecBatchFactors <- array(1, length(vecCounts)) # length number of samples
 
         lmBatchFactors <- lm(vecCountsSFcorrectedNorm ~ ., dfCovProc)
         matBatchFactors <- model.matrix(~ ., dfCovProc)
@@ -196,8 +197,8 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' \itemize{
 #' \item scaMu (scalar) Maximum likelihood estimator of
 #' negative binomial mean parameter.
-#' \item lsvecBatchFactors (list length number of vecCovFactor and vecCovContinuous)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item lsvecBatchFactors (list length number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
 #' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
@@ -670,22 +671,13 @@ fitConstImpulseGene <- function(
 #' \item vecidxTimepoint (idx vector length number of samples)
 #' Index of the time coordinates of each sample (reference is
 #' vecTimepointsUnique).
-#' \item lsvecBatchUnique (list number of confounders)
-#' List of string vectors. One vector per confounder: vector of unique batches
-#' in this confounder.
-#' \item lsvecidxBatches (idx list length number of confounding variables)
-#'   List of index vectors. 
-#'   One vector per confounding variable.
-#'   Each vector has one entry per sample with the index of the batch ID
-#'   within the given confounding variable of the given sample. Reference
-#'   is the list of unique batch ids for each confounding variable.
 #' }
 #' }
 #' 
 #' @author David Sebastian Fischer
 fitConstImpulse <- function(
     matCountDataProcCondition, vecDispersions, vecSizeFactors, 
-    vecTimepoints, lsvecBatches, boolFitConst, boolBeta2, MAXIT) {
+    vecTimepoints, dfCovProc, boolFitConst, boolBeta2, MAXIT) {
     
     # Maximum number of iterations for numerical optimisation of likelihood
     # function in MLE fitting of impulse and constant model:
@@ -724,8 +716,7 @@ fitConstImpulse <- function(
     names(lsFits) <- rownames(matCountDataProcCondition)
     
     return(list(lsFits = lsFits, vecTimepointsUnique = vecTimepointsUnique, 
-                vecidxTimepoint = vecidxTimepoint, lsvecBatchUnique = lsvecBatchUnique, 
-                lsvecidxBatch = lsvecidxBatch))
+                vecidxTimepoint = vecidxTimepoint))
 }
 
 
@@ -744,6 +735,10 @@ fitConstImpulse <- function(
 #' @param vecConfounders (vector of strings number of confounding variables)
 #' Factors to correct for during batch correction.
 #' Names refer to columns in dfAnnotation.
+#' @param lsdfCovProc (list length 3)
+#' One data frame each for "case", "control", and "combined".
+#' Continous covariates are centered and scaled within each group.
+#' Categorical covariates are factored within each group. 
 #' @param boolCaseCtrl (bool) 
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
@@ -841,44 +836,29 @@ fitConstImpulse <- function(
 #' }
 #' 
 #' @author David Sebastian Fischer
-fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl, boolBeta2, MAXIT) {
+fitModels <- function(objectImpulseDE2, boolCaseCtrl, boolBeta2, MAXIT) {
     
     lsFitResults_all = list()
-    dfAnnot <- get_dfAnnotationProc(obj=objectImpulseDE2)
+    dfAnnot <- get_dfDESeqAnnotationProc(obj=objectImpulseDE2) # full list of samples with time
+    lsdfCovProc <- get_lsdfCovProc(obj=objectImpulseDE2)
     
     # Conditions to be fitted separately
+    # These correspond to names in "lsdfCovProc"
+    # Also get lists of samples in each condition
     if (boolCaseCtrl) {
         vecLabels <- c("combined", "case", "control")
+        lsSamplesByCond <- list(
+            combined = rownames(lsdfCovProc$combined), 
+            case = rownames(lsdfCovProc$case), 
+            control = rownames(lsdfCovProc$control))
     } else {
         vecLabels <- c("case")
-    }
-    
-    # Create lists of samples per condition
-    if (boolCaseCtrl) {
-        lsSamplesByCond <- list(
-            combined = dfAnnot$Sample, 
-            case = dfAnnot[dfAnnot$Condition == "case", ]$Sample, 
-            control = dfAnnot[dfAnnot$Condition == "control", ]$Sample)
-    } else {
-        lsSamplesByCond <- list(
-            case = dfAnnot[dfAnnot$Condition == "case", ]$Sample)
-    }
-    
-    # Get batch assignments of samples
-    if (!is.null(vecConfounders)) {
-        lsvecBatches <- lapply(vecConfounders, function(confounder) {
-            vecBatches <- dfAnnot[, confounder]
-            names(vecBatches) <- dfAnnot$Sample
-            return(vecBatches)
-        })
-        names(lsvecBatches) <- vecConfounders
-    } else {
-        lsvecBatches <- NULL
+        lsSamplesByCond <- list(case = rownames(lsdfCovProc$case)
     }
     
     # Get time point assignments of samples
-    vecTimepoints <- dfAnnot$Time
-    names(vecTimepoints) <- colnames(get_matCountDataProc(obj=objectImpulseDE2))
+    vecTimepoints = dfAnnot$Time
+    names(vecTimepoints) = dfAnnot$Sample
     
     # Fitting for different runs Fit constant model only if doing case-only
     # analysis for which the constant model is the null model or in the
@@ -892,8 +872,7 @@ fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl, boolBeta2,
                 obj=objectImpulseDE2)[lsSamplesByCond[[label]]], 
             vecDispersions = get_vecDispersions(obj=objectImpulseDE2), 
             vecTimepoints = vecTimepoints[lsSamplesByCond[[label]]], 
-            lsvecBatches = lapply(lsvecBatches, function(confounder) 
-                confounder[lsSamplesByCond[[label]]] ), 
+            dfCovProc = lsdfCovProc[[label]], 
             boolFitConst = TRUE,
             boolBeta2 = boolBeta2,
             MAXIT = MAXIT)
@@ -902,15 +881,13 @@ fitModels <- function(objectImpulseDE2, vecConfounders, boolCaseCtrl, boolBeta2,
         # inferred means may be of interest - do for all conditions.
         return(lsFitResults)
     })
-    lsModelFitsByCondFormat <- lapply(
-        lsFitResultsByCond, function(res) res$lsFits)
+    lsModelFitsByCondFormat <- lapply(lsFitResultsByCond, 
+        function(res) res$lsFits)
     names(lsModelFitsByCondFormat) <- vecLabels
     lsModelFitsByCondFormat$IdxGroups <- lapply(
         lsFitResultsByCond, function(res) {
             list(vecTimepointsUnique = res$vecTimepointsUnique, 
-                 vecidxTimepoint = res$vecidxTimepoint, 
-                 lsvecBatchUnique = res$lsvecBatchUnique, 
-                 lsvecidxBatch = res$lsvecidxBatch)
+                 vecidxTimepoint = res$vecidxTimepoint)
         })
     names(lsModelFitsByCondFormat$IdxGroups) <- vecLabels
     for (label in vecLabels){ 
