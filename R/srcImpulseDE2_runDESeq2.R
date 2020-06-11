@@ -70,7 +70,6 @@ runDESeq2 <- function(
             cont = paste0(c("~ TimeCateg", vecCovAll), 
                 collapse = " + ")
             tryCatch({
-                print(cont)
                 dds <- suppressWarnings( DESeqDataSetFromMatrix(
                     countData = matCountDataProc,
                     colData = dfAnnotationProc,

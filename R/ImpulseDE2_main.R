@@ -251,7 +251,7 @@ runImpulseDE2 <- function(
         # 2. Run DESeq2 Use dispersion factors from DESeq2 if
         if (is.null(vecDispersionsExternal)) {
             strMessage <- paste0("# Run DESeq2: Using dispersion factors",
-                                 "computed by DESeq2.")
+                                 " computed by DESeq2.")
             if (boolVerbose) { message(strMessage) }
             strReport <- paste0(strReport, "\n", strMessage)
             tm_runDESeq2 <- system.time({
@@ -329,8 +329,6 @@ runImpulseDE2 <- function(
             tm_fitSigmoid <- system.time({
                 objectImpulseDE2 <- fitSigmoidModels(
                     objectImpulseDE2 = objectImpulseDE2, 
-                    vecCovFactor = vecCovFactor,
-                    vecCovContinuous = vecCovContinuous, 
                     strCondition = "case",
                     MAXIT = MAXIT)
             })

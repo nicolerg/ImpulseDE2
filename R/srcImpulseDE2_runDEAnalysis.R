@@ -87,7 +87,7 @@ runDEAnalysis <- function(
     objectImpulseDE2, boolCaseCtrl, 
     boolIdentifyTransients, boolBeta2, scaQThresTransients = 0.001) {
     
-    dfAnnot <- get_dfAnnotationProc(obj = objectImpulseDE2)
+    dfAnnot <- get_dfDESeqAnnotationProc(obj = objectImpulseDE2)
     
     if (!boolCaseCtrl) {
         # Case-only: Take Values from the only fitting performed: case The full
@@ -100,24 +100,21 @@ runDEAnalysis <- function(
         # Mean inferred expression:
         vecMuCase <- sapply(get_lsModelFits(objectImpulseDE2)$case, 
                             function(fit) fit$lsConstFit$scaMu)
-        if (!is.null(get_vecConfounders(objectImpulseDE2))) {
-            scaNBatchFactors <- sum(sapply(
-                get_vecConfounders(objectImpulseDE2), function(confounder)
-                length(unique(dfAnnot[
-                    , confounder])) - 1
-            ))
+        # Get number of covariates 
+        if(!is.null(get_lsdfCovProc(objectImpulseDE2)$case)){
+            scaNBatchFactors = ncol(model.matrix(~., data=get_lsdfCovProc(objectImpulseDE2)$case))
         } else {
             scaNBatchFactors <- 0
         }
-        # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
-        # for each batch (except for the first one) for each confounder.
+        # 6 impulse model parameters, 1 dispersion estimate, and number of 
+        # continuous covariates and dummy variables
         if(boolBeta2){
             scaDegFreedomFull <- 7 + 1 + scaNBatchFactors
         }else{
             scaDegFreedomFull <- 6 + 1 + scaNBatchFactors
         }
-        # 1 constant model parameter1, 1 dispersion estimate and 1 batch factor
-        # for each batch (except for the first one) for each confounder.
+        # 1 constant model parameter1, 1 dispersion estimate, and number of 
+        # continuous covariates and dummy variables
         scaDegFreedomRed <- 1 + 1 + scaNBatchFactors
         
         vecConvergenceImpulse <- sapply(
@@ -140,34 +137,39 @@ runDEAnalysis <- function(
         # Mean inferred expression: On combined data
         vecMuCombined <- sapply(get_lsModelFits(obj=objectImpulseDE2)$combined, 
                                 function(fit) fit$lsConstFit$scaMu)
-        if (!is.null(get_vecConfounders(obj=objectImpulseDE2))) {
-            scaNBatchFactorsFull <- sum(sapply(
-                get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
-                    length(unique(dfAnnot[dfAnnot$Condition == "case", 
-                                          confounder])) - 1 + 
-                        length(unique(dfAnnot[dfAnnot$Condition == "control", 
-                                              confounder])) - 1
-                }))
-            scaNBatchFactorsRed <- sum(sapply(
-                get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
-                length(unique(dfAnnot[, confounder])) - 1
-            }))
+        # Get number of covariates 
+        if(!is.null(get_lsdfCovProc(obj=objectImpulseDE2)$combined)){
+            scaNBatchFactorsFull <- (ncol(model.matrix(~.,data=get_lsdfCovProc(obj=objectImpulseDE2)$case)) +
+                ncol(model.matrix(~.,data=get_lsdfCovProc(obj=objectImpulseDE2)$control)))
+            scaNBatchFactorsRed <- ncol(model.matrix(~., data=get_lsdfCovProc(obj=objectImpulseDE2)$combined))
         } else {
             scaNBatchFactorsFull <- 0
             scaNBatchFactorsRed <- 0
         }
-        # 6 impulse model parameters for each case and control, 1 dispersion
-        # estimate and 1 batch factor for each batch (except for the first one)
-        # for each confounder in each condition.
+        # if (!is.null(get_vecConfounders(obj=objectImpulseDE2))) {
+        #     scaNBatchFactorsFull <- sum(sapply(
+        #         get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
+        #             length(unique(dfAnnot[dfAnnot$Condition == "case", 
+        #                                   confounder])) - 1 + 
+        #                 length(unique(dfAnnot[dfAnnot$Condition == "control", 
+        #                                       confounder])) - 1
+        #         }))
+        #     scaNBatchFactorsRed <- sum(sapply(
+        #         get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
+        #         length(unique(dfAnnot[, confounder])) - 1
+        #     }))
+        # } else {
+        #     scaNBatchFactorsFull <- 0
+        #     scaNBatchFactorsRed <- 0
+        # }
+
+        # 6 or 7 impulse model parameters for each case and control, 1 dispersion
+        # estimate, and 1 correction factor for each variable (dummy or continuous)
         if(boolBeta2){
-            scaDegFreedomFull <- 7 * 2 + 1 + scaNBatchFactorsFull
-            # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
-            # for each batch (except for the first one) for each confounder.
+            scaDegFreedomFull <- (7 * 2) + 1 + scaNBatchFactorsFull
             scaDegFreedomRed <- 7 + 1 + scaNBatchFactorsRed 
         }else{
-            scaDegFreedomFull <- 6 * 2 + 1 + scaNBatchFactorsFull
-            # 6 impulse model parameters, 1 dispersion estimate and 1 batch factor
-            # for each batch (except for the first one) for each confounder.
+            scaDegFreedomFull <- (6 * 2) + 1 + scaNBatchFactorsFull
             scaDegFreedomRed <- 6 + 1 + scaNBatchFactorsRed       
         }
 
@@ -199,7 +201,9 @@ runDEAnalysis <- function(
         # Case-only
         dfDEAnalysis = data.frame(
             Gene = row.names(get_matCountDataProc(obj=objectImpulseDE2)), 
-            p = vecPvalue, padj = vecPvalueBH, loglik_full = vecLogLikFull, 
+            p = vecPvalue, 
+            padj = vecPvalueBH, 
+            loglik_full = vecLogLikFull, 
             loglik_red = vecLogLikRed, 
             df_full = rep(scaDegFreedomFull, scaNGenes), 
             df_red = rep(scaDegFreedomRed, scaNGenes), 
@@ -211,8 +215,10 @@ runDEAnalysis <- function(
         # Case-control
         dfDEAnalysis = data.frame(
             Gene = row.names(get_matCountDataProc(obj=objectImpulseDE2)), 
-            p = as.numeric(vecPvalue), padj = as.numeric(vecPvalueBH), 
-            loglik_full = vecLogLikFull, loglik_red = vecLogLikRed, 
+            p = as.numeric(vecPvalue), 
+            padj = as.numeric(vecPvalueBH), 
+            loglik_full = vecLogLikFull, 
+            loglik_red = vecLogLikRed, 
             df_full = rep(scaDegFreedomFull, scaNGenes), 
             df_red = rep(scaDegFreedomRed, scaNGenes), 
             mean = vecMuCombined, 
@@ -238,12 +244,14 @@ runDEAnalysis <- function(
                                  function(fit) fit$lsConstFit$scaLL)
         if (boolCaseCtrl) {
             # Get number of batch parameters only in case condition
-            if(!is.null(get_vecConfounders(obj=objectImpulseDE2))) {
-                scaNBatchFactors <- sum(sapply(
-                    get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
-                        length(unique(dfAnnot[dfAnnot$Condition == "case", 
-                                              confounder])) - 1
-                    }))
+            if(!is.null(get_lsdfCovProc(obj=objectImpulseDE2)$case)){
+                scaNBatchFactors <- ncol(model.matrix(~., data=get_lsdfCovProc(obj=objectImpulseDE2)$case))
+            # if(!is.null(get_vecConfounders(obj=objectImpulseDE2))) {
+            #     scaNBatchFactors <- sum(sapply(
+            #         get_vecConfounders(obj=objectImpulseDE2), function(confounder) {
+            #             length(unique(dfAnnot[dfAnnot$Condition == "case", 
+            #                                   confounder])) - 1
+            #         }))
             } else {
                 scaNBatchFactors <- 0
             }
@@ -434,14 +442,15 @@ runDEAnalysis <- function(
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
-#' vecConfounders  = NULL,
+#' boolBeta2       = FALSE,
+#' vecCovFactor    = NULL,
+#' vecCovContinous = NULL,
 #' boolIdentifyTransients = FALSE,
 #' scaNProc        = 1 )
 #' # You could have used boolIdentifyTransients=TRUE
 #' # to avoid the following post wrapper fitting.
 #' objectImpulseDE2 <- fitSigmoidModels(
 #' objectImpulseDE2 = objectImpulseDE2,
-#' vecConfounders   = NULL,
 #' strCondition     = 'case')
 #' objectImpulseDE2 <- updateDEAnalysis(
 #' objectImpulseDE2=objectImpulseDE2,

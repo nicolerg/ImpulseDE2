@@ -107,8 +107,8 @@ setClassUnion("data.frameORNULL", members = c("data.frame", "NULL"))
 #' \itemize{
 #' \item lsImpulseFit (list) List of impulse fit parameters and results.
 #' \itemize{
-#' \item vecImpulseParam (numeric vector length 6)
-#' {beta, h0, h1, h2, t1, t2}
+#' \item vecImpulseParam (numeric vector length 6 or 7)
+#' {beta, h0, h1, h2, t1, t2} or {beta1, beta2, h0, h1, h2, t1, t2}
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.

@@ -63,7 +63,7 @@
 #' \itemize{
 #'    \item matCountDataProc (matrix genes x samples)
 #'    Read count data.
-#'    \item dfAnnotationProc (data frame samples x covariates) 
+#'    \item dfDESeqAnnotationProc (data frame samples x covariates) 
 #'    {Sample, Condition, Time (numeric), TimeCateg (str)
 #'    (and confounding variables if given).}
 #'    Processed annotation table with covariates for each sample.

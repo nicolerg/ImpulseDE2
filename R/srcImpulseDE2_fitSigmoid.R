@@ -137,10 +137,10 @@ estimateSigmoidParam <- function(
 #' Maximum likelihood estimators of sigmoidal model parameters.
 #' \item vecSigmoidValue (numeric vector length number of time points)
 #' Values of sigmoid model fit at time points used for fit.
-#' \item lsvecBatchFactors (list length number of confounders)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -208,19 +208,19 @@ fitSigmoidModel <- function(
         matBatchFactors <- model.matrix(~ ., dfCovProc)[,-1]
 
         vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
-        lsvecBatchFactors <- exp(vecThetaCovar)
-        lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
-        lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
-        names(lsvecBatchFactors) <- colnames(matBatchFactors)
+        vecCorrectionFactors <- exp(vecThetaCovar)
+        vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
+        vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        names(vecCorrectionFactors) <- colnames(matBatchFactors)
 
     } else {
-        lsvecBatchFactors <- NULL
+        vecCorrectionFactors <- NULL
     }
     
     return(list(
         vecSigmoidParam = vecSigmoidParam, 
         vecSigmoidValue = vecSigmoidValue, 
-        lsvecBatchFactors = lsvecBatchFactors, 
+        vecCorrectionFactors = vecCorrectionFactors, 
         scaDispParam = scaDisp, 
         scaLL = lsFit$value, 
         scaConvergence = lsFit$convergence))
@@ -273,10 +273,10 @@ fitSigmoidModel <- function(
 #' Maximum likelihood estimators of sigmoidal model parameters.
 #' \item vecSigmoidValue (numeric vector length number of time points)
 #' Values of sigmoid model fit at time points used for fit.
-#' \item lsvecBatchFactors (list length number of confounders)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -301,17 +301,23 @@ fitSigmoidGene <- function(
     
     # 2. Initialisation: Up
     lsFitUp <- fitSigmoidModel(
-        vecSigmoidParamGuess = vecParamGuessUp, vecCounts = vecCounts, 
-        scaDisp = scaDisp, vecSizeFactors = vecSizeFactors, 
+        vecSigmoidParamGuess = vecParamGuessUp, 
+        vecCounts = vecCounts, 
+        scaDisp = scaDisp, 
+        vecSizeFactors = vecSizeFactors, 
         vecTimepointsUnique = vecTimepointsUnique, 
-        vecidxTimepoint = vecidxTimepoint, dfCovProc = dfCovProc, 
+        vecidxTimepoint = vecidxTimepoint, 
+        dfCovProc = dfCovProc, 
         MAXIT = MAXIT)
     # 3. Initialisation: Down
     lsFitDown <- fitSigmoidModel(
-        vecSigmoidParamGuess = vecParamGuessDown, vecCounts = vecCounts, 
-        scaDisp = scaDisp, vecSizeFactors = vecSizeFactors, 
+        vecSigmoidParamGuess = vecParamGuessDown, 
+        vecCounts = vecCounts, 
+        scaDisp = scaDisp, 
+        vecSizeFactors = vecSizeFactors, 
         vecTimepointsUnique = vecTimepointsUnique, 
-        vecidxTimepoint = vecidxTimepoint, dfCovProc = dfCovProc, 
+        vecidxTimepoint = vecidxTimepoint, 
+        dfCovProc = dfCovProc, 
         MAXIT = MAXIT)
     
     # (II) Select best fit and report fit type
@@ -336,9 +342,6 @@ fitSigmoidGene <- function(
 #' @param objectImpulseDE2 (object class ImpulseDE2Object)
 #' Object to be fit with sigmoidal model. Needs to be fitted with impulse 
 #' model before.
-#' @param vecConfounders (vector of strings number of confounding variables)
-#' Factors to correct for during batch correction.
-#' Names refer to columns in dfAnnotation.
 #' @param strCondition (str)
 #' Name of condition entry in lsModelFits for which sigmoidal
 #' models are to be fit to each gene.
@@ -375,10 +378,11 @@ fitSigmoidGene <- function(
 #' \item vecidxTimepoint (idx vector length number of samples)
 #' Index of the time coordinates of each sample (reference is
 #' vecTimepointsUnique).
-#' \item lsvecBatchUnique (list number of confounders)
-#' List of string vectors. One vector per confounder: vector of unique batches
-#' in this confounder.
-#'   \item vecSamples (vector number of samples) Names of samples fit
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
+#' These are also maximum likelihood estimators.
+#' NULL if no covariates given.
+#' \item vecSamples (vector number of samples) Names of samples fit
 #' for this condition in same order as index vectors above.
 #' }
 #' }   
@@ -401,10 +405,10 @@ fitSigmoidGene <- function(
 #' Maximum likelihood estimators of sigmoidal model parameters.
 #' \item vecSigmoidValue (numeric vector length number of time points)
 #' Values of sigmoid model fit at time points used for fit.
-#' \item lsvecBatchFactors (list length number of confounders)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -423,21 +427,22 @@ fitSigmoidGene <- function(
 #' vecBatchesA      = NULL,
 #' vecBatchesB      = NULL,
 #' scaNConst        = 0,
-#' scaNImp          = 20,
-#' scaNLin          = 10,
-#' scaNSig          = 20)
+#' scaNImp          = 50,
+#' scaNLin          = 0,
+#' scaNSig          = 50)
 #' objectImpulseDE2 <- runImpulseDE2(
 #' matCountData    = lsSimulatedData$matObservedCounts, 
 #' dfAnnotation    = lsSimulatedData$dfAnnotation,
 #' boolCaseCtrl    = FALSE,
-#' vecConfounders  = NULL,
+#' boolBeta2       = FALSE,
+#' vecCovFactor    = NULL,
+#' vecCovContinous = NULL,
 #' boolIdentifyTransients = FALSE,
 #' scaNProc        = 1 )
 #' # You could have used boolIdentifyTransients=TRUE
 #' # to avoid the following post wrapper fitting.
 #' objectImpulseDE2 <- fitSigmoidModels(
 #' objectImpulseDE2 = objectImpulseDE2,
-#' vecConfounders   = NULL,
 #' strCondition     = 'case')
 #' objectImpulseDE2 <- updateDEAnalysis(
 #' objectImpulseDE2=objectImpulseDE2,
@@ -448,7 +453,7 @@ fitSigmoidGene <- function(
 #' @author David Sebastian Fischer
 #' 
 #' @export
-fitSigmoidModels <- function(objectImpulseDE2, strCondition, MAXIT=1000) {
+fitSigmoidModels <- function(objectImpulseDE2, strCondition, MAXIT) {
     
     lsdfCovProc <- get_lsdfCovProc(obj=objectImpulseDE2)
     dfCovProc = lsdfCovProc[[strCondition]]

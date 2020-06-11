@@ -160,7 +160,7 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
         )
     }
 
-    return(list(peak = vecParamGuessPeak, valley = vecParamGuessValley))
+    return(list(peak = unname(vecParamGuessPeak), valley = unname(vecParamGuessValley)))
 }
 
 #' Fit a constant model to data of a gene
@@ -197,7 +197,7 @@ estimateImpulseParam <- function(vecCounts, vecTimepoints, vecSizeFactors,
 #' \itemize{
 #' \item scaMu (scalar) Maximum likelihood estimator of
 #' negative binomial mean parameter.
-#' \item lsvecBatchFactors (list length number of continuous covariates and dummy variables)
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
 #' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
 #' NULL if no covariates given.
@@ -257,16 +257,16 @@ fitConstModel <- function(
         matBatchFactors <- model.matrix(~ ., dfCovProc)[,-1]
 
         vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
-        lsvecBatchFactors <- exp(vecThetaCovar)
-        lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
-        lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
-        names(lsvecBatchFactors) <- colnames(matBatchFactors)
+        vecCorrectionFactors <- exp(vecThetaCovar)
+        vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
+        vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        names(vecCorrectionFactors) <- colnames(matBatchFactors)
 
     } else {
-        lsvecBatchFactors <- NULL
+        vecCorrectionFactors <- NULL
     }
     
-    return(list(scaMu = scaMu, lsvecBatchFactors = lsvecBatchFactors, 
+    return(list(scaMu = scaMu, vecCorrectionFactors = vecCorrectionFactors, 
                 scaDispParam = scaDisp, 
                 scaLL = lsFit$value, scaConvergence = lsFit$convergence))
 }
@@ -320,10 +320,10 @@ fitConstModel <- function(
 #' Maximum likelihood estimators of impulse model parameters.
 #' \item vecImpulseValue (numeric vector length number of time points)
 #' Values of impulse model fit at time points used for fit.
-#' \item lsvecBatchFactors (list length number of confounders)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -396,17 +396,17 @@ fitImpulseModel <- function(
         matBatchFactors <- model.matrix(~ ., dfCovProc)[,-1]
 
         vecThetaCovar <- lsFit$par[(scaNParamUsed + 1):(scaNParamUsed + ncol(matBatchFactors))]
-        lsvecBatchFactors <- exp(vecThetaCovar)
-        lsvecBatchFactors[lsvecBatchFactors < 10^(-10)] <- 10^(-10)
-        lsvecBatchFactors[lsvecBatchFactors > 10^(10)] <- 10^(10)
-        names(lsvecBatchFactors) <- colnames(matBatchFactors)
+        vecCorrectionFactors <- exp(vecThetaCovar)
+        vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
+        vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        names(vecCorrectionFactors) <- colnames(matBatchFactors)
     } else {
-        lsvecBatchFactors <- NULL
+        vecCorrectionFactors <- NULL
     }
     
     return(list(vecImpulseParam = vecImpulseParam, 
                 vecImpulseValue = vecImpulseValue, 
-                lsvecBatchFactors = lsvecBatchFactors, 
+                vecCorrectionFactors = vecCorrectionFactors, 
                 scaDispParam = scaDisp, 
                 scaLL = lsFit$value, 
                 scaConvergence = lsFit$convergence))
@@ -482,10 +482,10 @@ fitImpulseModel <- function(
 #' \itemize{
 #' \item scaMu (scalar) Maximum likelihood estimator of
 #' negative binomial mean parameter.
-#' \item lsvecBatchFactors (list length number of confounders)
-#' List of vectors of scalar batch correction factors for each sample.
+#' \item vecCorrectionFactors (list number of continuous covariates and dummy variables)
+#' Named list of scalar correction factors for each sample.
 #' These are also maximum likelihood estimators.
-#' NULL if no confounders given.
+#' NULL if no covariates given.
 #' \item scaDispParam (scalar) Dispersion parameter estimate
 #' used in fitting (hyper-parameter).
 #' \item scaLL (scalar) Loglikelihood of data under maximum likelihood
@@ -686,13 +686,6 @@ fitConstImpulse <- function(
 #' 
 #' @param objectImpulseDE2 (object class ImpulseDE2Object)
 #' Object to be fit.
-#' @param vecConfounders (vector of strings number of confounding variables)
-#' Factors to correct for during batch correction.
-#' Names refer to columns in dfAnnotation.
-#' @param lsdfCovProc (list length 3)
-#' One data frame each for "case", "control", and "combined".
-#' Continous covariates are centered and scaled within each group.
-#' Categorical covariates are factored within each group. 
 #' @param boolCaseCtrl (bool) 
 #' Whether to perform case-control analysis. Does case-only
 #' analysis if FALSE.
@@ -799,7 +792,7 @@ fitModels <- function(objectImpulseDE2, boolCaseCtrl, boolBeta2, MAXIT) {
             control = rownames(lsdfCovProc$control))
     } else {
         vecLabels <- c("case")
-        lsSamplesByCond <- list(case = rownames(lsdfCovProc$case)
+        lsSamplesByCond <- list(case = rownames(lsdfCovProc$case))
     }
     
     # Get time point assignments of samples
