@@ -33,7 +33,7 @@
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
 #' vecCovFactor    = NULL,
-#' vecCovContinous = NULL,
+#' vecCovContinuous = NULL,
 #' boolIdentifyTransients = FALSE,
 #' scaNProc        = 1 )
 #' modelFits <- computeModelFits(objectImpulseDE2=objectImpulseDE2)
@@ -54,44 +54,56 @@ computeModelFits <- function(objectImpulseDE2){
     # Get size factors for all samples
     vecSfValues <- get_vecSizeFactors(obj=objectImpulseDE2)
     
+    # Gene x sample matrix for samples in "condition"
+    # Samples are adjusted for size factors and covariates
     calcImpulseValueCondition <- function(obj, condition, dfAnnot){
-        # Gene x sample matrix for samples in "condition"
 
-        dfAnnotation <- dfAnnot[dfAnnot == condition]
+        dfAnnotation <- dfAnnot[dfAnnot$Condition == condition,]
+        
+        # Model matrix for covariate adjustment 
+        if(!is.null(get_lsdfCovProc(obj=obj)[[condition]])){
+            matBatchFactors <- model.matrix(~., data=get_lsdfCovProc(obj=obj)[[condition]])[,-1]
+        }else{
+            matBatchFactors <- NULL
+        }
+
+        # Samples:
         samples <- dfAnnotation$Sample
 
         # Time points:
         vecTimepoints <- dfAnnotation$Time
         vecTimepointsUnique <- sort(unique(vecTimepoints))
         vecidxTimepoint <- match(vecTimepoints, vecTimepointsUnique)
+        names(vecidxTimepoint) <- dfAnnotation$Sample
 
         # Scaling factors 
         # Size factors (per-sample):
-        vecSfValues <- get_vecSizeFactors(obj=objectImpulseDE2)[samples]
-        # Correction factors (per-condition):
-        # Names are covariates 
-        vecCorrectionFactors <- get_lsModelFits(obj=objectImpulseDE2)[[condition]][[x]]$lsImpulseFit$vecCorrectionFactors
+        vecSfValues <- get_vecSizeFactors(obj=obj)[samples]
 
         # Now do things on a gene-level:
-        matImpulseValueSample <- do.call(rbind, lapply(get_vecAllIDs(obj=objectImpulseDE2), function(x) {
+        matImpulseValueSample <- do.call(rbind, lapply(get_vecAllIDs(obj=obj), function(x) {
             # Get impulse values for samples in "condition"
             # One value per sample 
             vecImpulseValues <- ImpulseDE2:::evalImpulse_comp(
-                vecImpulseParam = get_lsModelFits(obj=objectImpulseDE2)[[condition]][[x]]$lsImpulseFit$vecImpulseParam, 
+                vecImpulseParam = get_lsModelFits(obj=obj)[[condition]][[x]]$lsImpulseFit$vecImpulseParam, 
                 vecTimepoints = vecTimepointsUnique)[vecidxTimepoint] 
+            names(vecImpulseValues) = names(vecidxTimepoint)
             # Make sure samples match up 
             stopifnot(names(vecImpulseValues) == names(vecSfValues))
             # Multiply impulse values by size factors
             vecModelValues <- vecImpulseValues * vecSfValues    
             # Multiply model values by correction factors from covariates
-            if(!is.null(vecCorrectionFactors)){
-                vecModelValues <- vecModelValues * vecCorrectionFactors
+            if(!is.null(matBatchFactors)){
+                vecThetaCovar <- get_lsModelFits(obj=obj)[[condition]][[x]]$lsImpulseFit$vecCorrectionFactors
+                vecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
+                vecModelValues <- vecModelValues * vecBatchFactors
             }
+
             return(vecModelValues)
             })
         )
 
-        rownames(matImpulseValueSample) <- get_vecAllIDs(obj=objectImpulseDE2)
+        rownames(matImpulseValueSample) <- get_vecAllIDs(obj=obj)
         colnames(matImpulseValueSample) <- samples
         return(matImpulseValueSample)
     }

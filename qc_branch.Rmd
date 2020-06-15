@@ -24,6 +24,7 @@ library(stats)
 library(SummarizedExperiment)
 library(utils)
 library(olsrr)
+library(data.table)
 ```
 
 ## Source my edited version of ImpulseDE2
@@ -73,7 +74,7 @@ dfAnnotation$var1 = ifelse(dfAnnotation$sex == 'female', 5, 10)
 ```
 
 ## Scenario 2: collinearity
-```{r add collinear cov, eval=T}
+```{r add collinear cov, eval=F}
 f = rnorm(nrow(dfAnnotation[dfAnnotation$sex =='female',]), 5, 0.5)
 m = rnorm(nrow(dfAnnotation[dfAnnotation$sex == 'male',]), 10, 1)
 dfAnnotation$var1[dfAnnotation$sex == 'female'] = f
@@ -116,7 +117,7 @@ dispersions(dds1) == dispersions(dds2)
 ```
 
 # Walk through main function, step by step 
-```{r process data}
+```{r process data, eval=F}
 # 1. Process input data
 # Extract count matrix if handed SummarizedExperiment
 if (class(matCountData) == "SummarizedExperiment"){ 
@@ -141,7 +142,7 @@ vecDispersionsExternalProc <-
     lsProcessedData$vecDispersionsExternalProc
 ```
 
-```{r check processed data }
+```{r check processed data, eval=F}
 # look at a few things 
 head(lsProcessedData$dfDESeqAnnotationProc)
 names(head(lsProcessedData$lsdfCovProc)) # lsdfCovProc is a new addition
@@ -149,7 +150,7 @@ head(lsProcessedData$lsdfCovProc$case)
 head(lsProcessedData$lsdfCovProc$control)
 ```
 
-```{r DESeq2}
+```{r DESeq2, eval=F}
 # 2. Run DESeq2 Use dispersion factors from DESeq2 if
 if (is.null(vecDispersionsExternal)) {
     vecDispersions <- runDESeq2(
@@ -169,7 +170,7 @@ vecSizeFactors <- computeNormConst(
     vecSizeFactorsExternal = vecSizeFactorsExternalProc)
 ```
 
-```{r create instance}
+```{r create instance, eval=F}
 # 4. Create instance of ImpulseDE2Object Create ImpulseDE2 object
 objectImpulseDE2 <- new(
     "ImpulseDE2Object", 
@@ -191,7 +192,7 @@ objectImpulseDE2 <- new(
     strReport = strReport)
 ```
 
-```{r check new things}
+```{r check new things, eval=F}
 names(get_lsdfCovProc(objectImpulseDE2))
 head(get_lsdfCovProc(objectImpulseDE2)$case)
 head(get_dfDESeqAnnotationProc(objectImpulseDE2))
@@ -199,7 +200,7 @@ get_vecCovContinuous(objectImpulseDE2)
 get_vecCovFactor(objectImpulseDE2)
 ```
 
-```{r fit null and alt for each gene}
+```{r fit null and alt for each gene, eval=F}
 # 5. Fit null and alternative model to each gene
 objectImpulseDE2 <- fitModels(
     objectImpulseDE2 = objectImpulseDE2, 
@@ -208,7 +209,7 @@ objectImpulseDE2 <- fitModels(
     MAXIT = MAXIT)
 ```
 
-```{r fit sigmoid}
+```{r fit sigmoid, eval=F}
 # 6. Fit sigmoid model to case condition if desired
 if (boolIdentifyTransients) {
     objectImpulseDE2 <- fitSigmoidModels(
@@ -256,4 +257,30 @@ objectImpulseDE3 = runImpulseDE2(
     boolIdentifyTransients = TRUE, 
     boolVerbose = TRUE,
     MAXIT = 1000) 
+```
+
+```{r look at output}
+names(objectImpulseDE3)
+dfres = objectImpulseDE3$dfImpulseDE2Results
+head(dfres)
+table(dfres$isTransient)
+table(dfres$isMonotonous)
+table(dfres$padj < 0.05)
+dtres = data.table(dfres)
+dtres[isTransient==TRUE]
+dtres[isMonotonous==TRUE & padj < 0.05] # why are these DE if they're monotonous?
+
+# get model fits
+mod = get_lsModelFits(obj=objectImpulseDE3)$case$gene1$lsImpulseFit$vecImpulseParam
+
+
+modelfits = computeModelFits(objectImpulseDE3)
+names(modelfits)
+modelfits$case["gene63",]
+modelfits$sample["gene63",]
+
+obj = objectImpulseDE3
+matBatchFactors <- model.matrix(~., data=get_lsdfCovProc(obj=obj)[["case"]])[,-1]
+vecThetaCovar <- get_lsModelFits(obj=obj)[["case"]][["gene1"]]$lsImpulseFit$vecCorrectionFactors
+vecBatchFactors <- t(exp(matBatchFactors %*% vecThetaCovar))
 ```

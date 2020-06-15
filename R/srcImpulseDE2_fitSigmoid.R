@@ -211,6 +211,7 @@ fitSigmoidModel <- function(
         vecCorrectionFactors <- exp(vecThetaCovar)
         vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
         vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        vecCorrectionFactors <- log(vecCorrectionFactors) # return non-exponentiated form
         names(vecCorrectionFactors) <- colnames(matBatchFactors)
 
     } else {
@@ -436,7 +437,7 @@ fitSigmoidGene <- function(
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
 #' vecCovFactor    = NULL,
-#' vecCovContinous = NULL,
+#' vecCovContinuous = NULL,
 #' boolIdentifyTransients = FALSE,
 #' scaNProc        = 1 )
 #' # You could have used boolIdentifyTransients=TRUE

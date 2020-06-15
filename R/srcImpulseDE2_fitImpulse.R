@@ -260,6 +260,7 @@ fitConstModel <- function(
         vecCorrectionFactors <- exp(vecThetaCovar)
         vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
         vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        vecCorrectionFactors <- log(vecCorrectionFactors) # return non-exponentiated version
         names(vecCorrectionFactors) <- colnames(matBatchFactors)
 
     } else {
@@ -399,6 +400,7 @@ fitImpulseModel <- function(
         vecCorrectionFactors <- exp(vecThetaCovar)
         vecCorrectionFactors[vecCorrectionFactors < 10^(-10)] <- 10^(-10)
         vecCorrectionFactors[vecCorrectionFactors > 10^(10)] <- 10^(10)
+        vecCorrectionFactors <- log(vecCorrectionFactors) # return non-exponentiated version
         names(vecCorrectionFactors) <- colnames(matBatchFactors)
     } else {
         vecCorrectionFactors <- NULL
@@ -575,11 +577,7 @@ fitConstImpulseGene <- function(
 #' negative binomial dispersion hyper-parameters.
 #' @param vecTimepoints (numeric vector length number of samples)
 #' Time coordinates of each sample.
-#' @param lsvecBatches (list length number of confounding variables)
-#' List of vectors. 
-#' One vector per confounding variable.
-#' Each vector has one entry per sample with the name of the batch ID
-#' within the given confounding variable of the given sample.
+#' @param dfCovProc (data frame)
 #' @param boolFitConst (bool) Whether to fit a constant model.
 #' @param boolBeta2 (bool)
 #' Whether to model two different slopes for impulse model instead of 

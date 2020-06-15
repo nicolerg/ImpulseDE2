@@ -220,6 +220,16 @@ processData <- function(
         vecTimepoints <- unique(as.vector( dfAnnotation$Time ))
         # Check that time points are numeric
         checkNumeric(dfAnnotation$Time, "dfAnnotation$Time")
+        # Check that there are at least 3 time points
+        if(length(unique(vecTimepoints)) < 3){
+            stop(paste0("Fewer than 3 time points were found: {",
+                paste0(unique(vecTimepoints), collapse=','),
+                "}. More time points are required to fit an impulse model."))
+        }else if(length(unique(vecTimepoints)) < 5){
+            warning(paste0("Fewer than 5 time points were found: {",
+                paste0(unique(vecTimepoints), collapse=','),
+                "}. We recommend at least 5 time points to fit an impulse model."))
+        }
         ### d) Conditions
         lsConditions <- unique( dfAnnotation$Condition )
         # Check that given conditions exisit in annotation table
@@ -291,6 +301,58 @@ processData <- function(
                 dfTmp[,covFactor] = paste0('_', dfTmp[,covFactor])
             }
             checkFullRank(dfTmp)
+        }
+        ### h) Check that there are at least as many samples as max number of parameters estimated
+        # N samples
+        if(boolCaseCtrl){
+            scaNSamples <- length(dfAnnotation$Sample[dfAnnotation$Condition %in% c("case","control")])
+        }else{
+            scaNSamples <- length(dfAnnotation$Sample[dfAnnotation$Condition == "case"])
+        }
+        # N factor levels 
+        if(!is.null(vecCovFactor)){
+            if(boolCaseCtrl){
+                scaNCorrectionFactors <- sum(as.numeric(lapply(vecCovFactor, function(x){
+                    length(unique(dfAnnotation[dfAnnotation$Condition %in% c("case","control"), x])) - 1
+                    })))
+            }else{
+                scaNCorrectionFactors <- sum(as.numeric(lapply(vecCovFactor, function(x){
+                    length(unique(dfAnnotation[dfAnnotation$Condition == "case", x])) - 1
+                    })))
+            }
+        }else{
+            scaNCorrectionFactors <- 0
+        }
+        # N continuous covariates 
+        if(!is.null(vecCovContinuous)){
+            scaNCorrectionFactors <- scaNCorrectionFactors + length(vecCovContinuous)
+        }
+        # Impulse params + dispersion + correction factors
+        if(boolBeta2){
+            scaDegFreedomImpulse <- 7 + 1 + scaNCorrectionFactors
+        }else{
+            scaDegFreedomImpulse <- 6 + 1 + scaNCorrectionFactors
+        }
+        if(scaDegFreedomImpulse > scaNSamples){
+            if(boolBeta2){
+                message <- paste0("There are fewer samples than degrees of freedom for the impulse model:\n",
+                    "Found ",scaNSamples," \"case\"/\"control\" samples;\n",
+                    "Impulse model with 2 betas is defined by 7 parameters;\n",
+                    "Additionally, the likelihood function depends on 1 dispersion estimate")
+            }else{
+                message <- paste0("There are fewer samples than degrees of freedom for the impulse model:\n",
+                    "Found ",scaNSamples," \"case\" samples;\n",
+                    "Impulse model with 1 beta is defined by 6 parameters;\n",
+                    "Additionally, the likelihood function depends on 1 dispersion estimate")
+            }
+            if(scaNCorrectionFactors > 0){
+                message <- paste0(message, 
+                    ";\nAdditionally, supplied covariates {", 
+                    paste0(c(vecCovContinuous, vecCovFactor), collapse=","),
+                    "} require an additional ", scaNCorrectionFactors, 
+                    " parameters to be estimated")
+            }
+            stop(message)
         }
         
         ### 3. Check expression table content
@@ -520,22 +582,18 @@ processData <- function(
         return(lsdfCovProc)
     }
 
-    # Calculate variance inflation factor for all covariates, including Time and Condition (when applicable)
+    # Calculate variance inflation factor between each covariate and {time,condition}
     checkConfounding <- function(dfDESeqAnnotationProc, boolCaseCtrl, 
         vecCovFactor, vecCovContinuous, lsdfCovProc){
-            
+
         if(boolCaseCtrl){
             # check the "combined" data frame 
             df = lsdfCovProc[["combined"]]
             # get condition
             df$Condition = dfDESeqAnnotationProc$Condition[match(dfDESeqAnnotationProc$Sample, rownames(df))]
-            # format contrast
-            contrast = paste0('tmp ~ ', paste0(c(vecCovFactor, vecCovContinuous, 'Condition', 'Time'), collapse = " + "))
         }else{
             # check the "case" data frame 
             df = lsdfCovProc[["case"]]
-            # format contrast
-            contrast = paste0('tmp ~ ', paste0(c(vecCovFactor, vecCovContinuous, 'Time'), collapse = " + "))
         }
 
         # get timepoints 
@@ -543,23 +601,45 @@ processData <- function(
         # get random outcome
         df$tmp = seq(1:nrow(df))
 
-        # linear regression 
-        model = lm(eval(parse(text=contrast)), data=df)
-        vif = as.data.frame(ols_vif_tol(model))
-
-        if(any(vif$VIF > 10)){
-            collinear_cov = vif[vif$VIF > 10, "Variables"]
-            warning(paste0("A variance inflation factor > 10 has been identified ",
-                "for the following covariates, which indicates serious collinearity needing correction: {", 
-                paste(collinear_cov, collapse=','), "}. We strongly recommend considering the correlation structure ",
-                "between covariates before proceeding.\n"))
-        }else if(any(vif$VIF > 4)){
-            collinear_cov = vif[vif$VIF > 4, "Variables"]
-            warning(paste0("A variance inflation factor > 4 has been identified ",
-                "for the following covariates, which warrants further investigation: {", 
-                paste(collinear_cov, collapse=','), "}.\n"))
+        check_vif <- function(model){
+            df = as.data.frame(ols_vif_tol(model))
+            if(any(df$VIF > 10)){
+                collinear_cov = vif[vif$VIF > 10, "Variables"]
+                warning(paste0("A variance inflation factor > 10 has been identified ",
+                    "for the following covariates, which indicates serious collinearity needing correction: {", 
+                    paste(collinear_cov, collapse=','), "}. We strongly recommend considering the correlation structure ",
+                    "between covariates before proceeding.\n"))
+            }else if(any(df$VIF > 4)){
+                collinear_cov = df[df$VIF > 4, "Variables"]
+                warning(paste0("A variance inflation factor > 4 has been identified ",
+                    "for the following covariates, which warrants further investigation: {", 
+                    paste(collinear_cov, collapse=','), "}.\n"))
+            }
         }
 
+        if(boolCaseCtrl){
+            # Check for confounding between Time and Condition
+            model = lm(tmp ~ Condition + Time, data=df)
+            vif = as.data.frame(ols_vif_tol(model))
+            if(any(vif$VIF > 10)){
+                stop(paste0("A variance inflation factor > 10 has been identified for Time and Condition, ",
+                    "which indicates that time points are largely distinct between \"case\" and \"control\" conditions. ",
+                    "Try running ImpulseDE2 in the \"case-only\" mode (i.e. boolCaseCtrl=FALSE)."))
+            }
+            # Check for confounding between each covariate and (Time and Condition)
+            for(cov in c(vecCovContinuous, vecCovFactor)){
+                contrast = paste0('tmp ~ Condition + Time + ', cov)
+                model = lm(eval(parse(text=contrast)), data=df)
+                check_vif(model)
+            }
+        }else{
+            # Check for confounding between each covariate and Time
+            for(cov in c(vecCovContinuous, vecCovFactor)){
+                contrast = paste0('tmp ~ Time + ', cov)
+                model = lm(eval(parse(text=contrast)), data=df)
+                check_vif(model)
+            }
+        }
     }
     
     # Name genes if names are not given.
@@ -617,8 +697,7 @@ processData <- function(
             warning(paste0("Sample(s) ",
                 paste0(colnames(matCountDataProc)[vecboolAllZeroSample], 
                        collapse=","),
-                " only contain(s) zeros (and NAs).",
-                " These samples are kept for analysis.\n"))
+                " only contain(s) zeros (and NAs). These samples are kept for analysis.\n"))
         }
         
         ### 2. Rows (Genes):
@@ -629,8 +708,7 @@ processData <- function(
         if(sum(!vecboolNonZeroGene) > 0){
             warning(paste0(sum(!vecboolNonZeroGene), " out of ",
                 length(vecboolNonZeroGene),
-                " genes do not have obserserved non-zero counts",
-                " and are excluded.\n"))
+                " genes do not have obserserved non-zero counts and are excluded.\n"))
         }
         
         # Sort count matrix column by annotation table

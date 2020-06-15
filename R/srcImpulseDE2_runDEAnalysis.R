@@ -263,7 +263,18 @@ runDEAnalysis <- function(
         }
         scaDegFreedomSigmoid <- 4 + 1 + scaNBatchFactors
         scaDegFreedomConst <- 1 + 1 + scaNBatchFactors
+        # scaDegFreedomLinear <- 2 + 1 + scaNBatchFactors
         
+        # Compare linear to constant
+
+        # Compare sigmoid to linear
+
+        # Compare impulse to sigmoid 
+
+        # Compare impulse to linear 
+
+        # Compare sigmoid to constant 
+
         # Compare impulse to sigmoid
         vecDevianceImpulseSigmoid <- 2 * (vecLogLikImpulse - vecLogLikSigmoid)
         vecPvalueImpulseSigmoid <- pchisq(
@@ -444,7 +455,7 @@ runDEAnalysis <- function(
 #' boolCaseCtrl    = FALSE,
 #' boolBeta2       = FALSE,
 #' vecCovFactor    = NULL,
-#' vecCovContinous = NULL,
+#' vecCovContinuous = NULL,
 #' boolIdentifyTransients = FALSE,
 #' scaNProc        = 1 )
 #' # You could have used boolIdentifyTransients=TRUE
